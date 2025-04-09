@@ -208,6 +208,9 @@
           case "game_ended":
             handleGameEnded(message)
             break
+          case "available_games":
+            updateAvailableGames(message.games)
+            break
           case "error":
             if (message.message === "Game not found") {
               // Stop reconnection attempts if game doesn't exist
@@ -459,31 +462,67 @@
           ws.send(JSON.stringify({ type: "start_game" }))
         })
 
-      function updateAvailableGames() {
-        fetch("/get-games")
-          .then((response) => response.json())
-          .then((games) => {
-            const gamesList = document.getElementById("games-list")
-            gamesList.innerHTML = ""
-            games.forEach((gameId) => {
-              const li = document.createElement("li")
-              li.textContent = `Game ID: ${gameId}`
-              const joinBtn = document.createElement("button")
-              joinBtn.textContent = "Join"
-              joinBtn.onclick = () => {
-                document.getElementById("game-id").value = gameId
-                document.getElementById("game-id").scrollIntoView()
-              }
-              li.appendChild(joinBtn)
-              gamesList.appendChild(li)
-            })
-          })
-          .catch((error) => console.error("Error fetching games:", error))
+      function updateAvailableGames(games) {
+        const gamesList = document.getElementById("games-list")
+        gamesList.innerHTML = ""
+        games.forEach((gameId) => {
+          const li = document.createElement("li")
+          li.textContent = `Game ID: ${gameId}`
+          const joinBtn = document.createElement("button")
+          joinBtn.textContent = "Join"
+          joinBtn.onclick = () => {
+            document.getElementById("game-id").value = gameId
+            document.getElementById("game-id").scrollIntoView()
+          }
+          li.appendChild(joinBtn)
+          gamesList.appendChild(li)
+        })
       }
 
-      // Call updateAvailableGames initially and every 15 seconds
-      updateAvailableGames()
-      setInterval(updateAvailableGames, 15000)
+      // Connect to WebSocket for lobby updates when page loads
+      if (!localStorage.getItem("gameId")) {
+        connectToGame(null, null) // Connect without game ID for lobby updates
+      }
+
+      function connectToLobby() {
+        const wsProtocol =
+          window.location.protocol === "https:" ? "wss:" : "ws:"
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws`
+        const socket = new WebSocket(wsUrl)
+
+        socket.onopen = () => {
+          socket.send(JSON.stringify({ type: "lobby" }))
+        }
+
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+          if (data.type === "available_games") {
+            updateGamesList(data.games)
+          }
+        }
+
+        socket.onclose = () => {
+          setTimeout(connectToLobby, 1000) // Reconnect on connection loss
+        }
+      }
+
+      function updateGamesList(games) {
+        const gamesList = document.getElementById("games")
+        gamesList.innerHTML = ""
+        games.forEach((gameId) => {
+          const li = document.createElement("li")
+          const joinButton = document.createElement("button")
+          joinButton.textContent = "Join Game"
+          joinButton.onclick = () => joinGame(gameId)
+          li.textContent = `Game: ${gameId} `
+          li.appendChild(joinButton)
+          gamesList.appendChild(li)
+        })
+      }
+
+      // Initialize WebSocket connection when page loads
+      window.addEventListener("load", connectToLobby)
+      // Remove the polling interval since we're using WebSocket now
     </script>
   </body>
 </html>

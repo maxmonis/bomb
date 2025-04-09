@@ -58,6 +58,8 @@ type GameMessage struct {
 var (
 	games = make(map[string]*Game)
 	gamesMutex sync.Mutex
+	lobbyConnections = make(map[*websocket.Conn]bool)
+	lobbyMutex sync.Mutex
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true // Allow all origins for now
@@ -112,7 +114,7 @@ func main() {
 		encodedQuery := url.QueryEscape(query)
 		searchUrl := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=%s", encodedQuery)
 		resp, err := http.Get(searchUrl)
-		if err != nil {
+		if (err != nil) {
 			log.Printf("Failed to fetch data from Wikimedia API: %v\n", err)
 			http.Error(w, "Failed to fetch data from Wikimedia API", http.StatusInternalServerError)
 			return
@@ -242,6 +244,9 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
 	games[gameID] = game
 	gamesMutex.Unlock()
 
+	// Broadcast updated game list to lobby
+	broadcastAvailableGames()
+
 	json.NewEncoder(w).Encode(map[string]string{"gameId": gameID})
 }
 
@@ -345,6 +350,15 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     if err := conn.ReadJSON(&msg); err != nil {
         log.Printf("Error reading initial message: %v", err)
         conn.Close()
+        return
+    }
+
+    // If no game ID is provided, this is a lobby connection
+    if msg.GameID == "" {
+        lobbyMutex.Lock()
+        lobbyConnections[conn] = true
+        lobbyMutex.Unlock()
+        broadcastAvailableGames()
         return
     }
 
@@ -659,6 +673,9 @@ func handlePlayerDisconnect(game *Game, player *Player) {
 		delete(games, game.ID)
 		gamesMutex.Unlock()
 		
+		 // Broadcast updated game list to lobby
+		broadcastAvailableGames()
+		
 		// Notify remaining players
 		for _, p := range game.Players {
 			p.Conn.WriteJSON(map[string]string{
@@ -822,4 +839,30 @@ func handleGetGames(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(gameList)
+}
+
+func broadcastAvailableGames() {
+	gamesMutex.Lock()
+	var gameList []string
+	for gameID := range games {
+		gameList = append(gameList, gameID)
+	}
+	gamesMutex.Unlock()
+
+	message := struct {
+		Type  string   `json:"type"`
+		Games []string `json:"games"`
+	}{
+		Type:  "available_games",
+		Games: gameList,
+	}
+
+	lobbyMutex.Lock()
+	for conn := range lobbyConnections {
+		if err := conn.WriteJSON(message); err != nil {
+			conn.Close()
+			delete(lobbyConnections, conn)
+		}
+	}
+	lobbyMutex.Unlock()
 }
