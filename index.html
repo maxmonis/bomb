@@ -39,7 +39,14 @@
     <div id="setup-area">
       <h2>Setup</h2>
       <label for="player-count">Number of Players:</label>
-      <input type="number" id="player-count" min="2" max="4" required />
+      <input
+        type="number"
+        id="player-count"
+        min="2"
+        max="4"
+        required
+        value="2"
+      />
       <div id="player-names"></div>
       <button id="start-game">Start Game</button>
     </div>
@@ -57,11 +64,7 @@
         >
       </div>
       <p id="instruction-text"></p>
-      <input
-        type="text"
-        id="search-bar"
-        placeholder="Search for a movie or actor"
-      />
+      <input type="text" id="search-bar" placeholder="Search movies" />
       <button id="search-button">Search</button>
       <ul id="search-results"></ul>
       <button id="challenge">Challenge</button>
@@ -139,6 +142,9 @@
             instructionText.textContent = `Name a movie starring ${lastSelection}`
             lastCategory = "movie"
           }
+          document.querySelector(
+            "#search-bar"
+          ).placeholder = `Search ${lastCategory}s`
           document.getElementById("category-selection").style.display = "none"
           document.getElementById("challenge").style.display =
             challengeOccurredThisRound ? "none" : "block"
@@ -182,6 +188,9 @@
       document.querySelectorAll('input[name="category"]').forEach((radio) => {
         radio.addEventListener("change", () => {
           lastCategory = radio.value
+          document.querySelector(
+            "#search-bar"
+          ).placeholder = `Search ${radio.value}s`
         })
       })
 
@@ -275,7 +284,9 @@
                 delete window.challengeState
                 // Start new round after challenge is complete
                 lastSelection = null
-                lastCategory = null
+                lastCategory = "movie"
+                document.querySelector("#search-bar").placeholder =
+                  "Search movies"
                 document.getElementById("category-selection").style.display =
                   "block"
                 document.getElementById("instruction-text").textContent = ""
