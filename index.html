@@ -232,6 +232,7 @@
         const waitingRoom = document.getElementById("waiting-room")
         const gameArea = document.getElementById("game-area")
         const playersList = document.getElementById("players-list")
+        const creatorControls = document.getElementById("creator-controls")
 
         // Clear the players list
         playersList.innerHTML = ""
@@ -242,25 +243,57 @@
           li.textContent = `${player.Name}${
             player.Name === game.CreatorID ? " (Creator)" : ""
           }`
+          // Add BOMB letters if any
+          if (player.Letters > 0) {
+            const letters = "BOMB".slice(0, player.Letters)
+            li.textContent += ` [${letters}]`
+          }
           playersList.appendChild(li)
         })
 
+        // Update isCreator flag based on game state
+        gameState.isCreator = game.CreatorID === gameState.playerName
+
         if (game.InProgress) {
-          // ...rest of the existing game in progress code...
           statusDiv.classList.remove("hidden")
           waitingRoom.classList.add("hidden")
           gameArea.classList.remove("hidden")
-          // ... existing game state update code ...
+
+          // Update current player display
+          const currentPlayerName = game.Players[game.CurrentPlayer]?.Name
+          document.getElementById("current-player").textContent =
+            currentPlayerName || ""
+
+          // Show/hide challenge button
+          const challengeBtn = document.getElementById("challenge")
+          const giveUpBtn = document.getElementById("give-up")
+
+          if (game.ChallengeState) {
+            challengeBtn.classList.add("hidden")
+            if (game.ChallengeState.ChallengedName === gameState.playerName) {
+              giveUpBtn.classList.remove("hidden")
+            } else {
+              giveUpBtn.classList.add("hidden")
+            }
+          } else {
+            giveUpBtn.classList.add("hidden")
+            if (
+              currentPlayerName !== gameState.playerName &&
+              game.RoundStarted
+            ) {
+              challengeBtn.classList.remove("hidden")
+            } else {
+              challengeBtn.classList.add("hidden")
+            }
+          }
         } else {
-          // Show waiting room, hide game area
           statusDiv.classList.add("hidden")
           waitingRoom.classList.remove("hidden")
           gameArea.classList.add("hidden")
           document.getElementById("game-id-display").textContent = game.ID
 
           // Update creator controls
-          if (gameState.playerName === game.CreatorID) {
-            const creatorControls = document.getElementById("creator-controls")
+          if (gameState.isCreator) {
             creatorControls.classList.remove("hidden")
 
             // Update join requests
@@ -285,9 +318,11 @@
               }
             )
 
-            // Update start button
-            document.getElementById("start-game-btn").disabled =
-              game.Players.length < 2
+            // Update start button - enable only if there are 2 or more players
+            const startButton = document.getElementById("start-game-btn")
+            startButton.disabled = game.Players.length < 2
+          } else {
+            creatorControls.classList.add("hidden")
           }
         }
       }

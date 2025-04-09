@@ -525,10 +525,9 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
 
     case "start_game":
         game.mu.Lock()
-        isCreator := player.Name == game.CreatorID
-        inProgress := game.InProgress
-        if isCreator && !inProgress {
+        if player.Name == game.CreatorID && !game.InProgress && len(game.Players) >= 2 {
             game.InProgress = true
+            game.CurrentPlayer = 0  // Start with the first player
             game.mu.Unlock()
             broadcastGameState(game)
         } else {
