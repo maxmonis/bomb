@@ -277,24 +277,47 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // First acquire gamesMutex to get the game
+    log.Printf("Acquiring games mutex to find game %s", req.GameID)
     gamesMutex.Lock()
     game, exists := games[req.GameID]
-    gamesMutex.Unlock()
-    
     if !exists {
+        gamesMutex.Unlock()
         log.Printf("Game not found: %s", req.GameID)
         http.Error(w, "Game not found", http.StatusNotFound)
         return
     }
+    gamesMutex.Unlock()
+    
+    // Then acquire game mutex with timeout
+    log.Printf("Attempting to acquire game mutex for game %s", req.GameID)
+    lockAcquired := make(chan struct{})
+    var lockTimeout bool
+    
+    go func() {
+        game.mu.Lock()
+        close(lockAcquired)
+    }()
 
-    log.Printf("Found game %s, acquiring game mutex", req.GameID)
-    game.mu.Lock()
-    defer game.mu.Unlock()
+    select {
+    case <-lockAcquired:
+        log.Printf("Successfully acquired game mutex for game %s", req.GameID)
+    case <-time.After(5 * time.Second):
+        lockTimeout = true
+        log.Printf("Timeout waiting for game mutex for game %s", req.GameID)
+        http.Error(w, "Server busy, please try again", http.StatusServiceUnavailable)
+        return
+    }
+
+    if lockTimeout {
+        return
+    }
 
     // Check if player name is already taken
     for _, player := range game.Players {
         if player.Name == req.Name {
             log.Printf("Player name already taken: %s", req.Name)
+            game.mu.Unlock()
             http.Error(w, "Player name already taken", http.StatusConflict)
             return
         }
@@ -302,52 +325,39 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
 
     if game.InProgress {
         log.Println("Cannot join - game already in progress")
+        game.mu.Unlock()
         http.Error(w, "Game already in progress", http.StatusBadRequest)
         return
     }
 
-    log.Printf("Adding join request for player: %s", req.Name)
     // Add join request
+    log.Printf("Adding join request for player: %s", req.Name)
     game.JoinRequests[req.Name] = JoinRequest{Name: req.Name, Message: req.Message}
 
-    // Notify creator about the new join request
-    state := struct {
-        Type    string `json:"type"`
-        Game    *Game  `json:"game"`
-    }{
-        Type: "game_state",
-        Game: game,
-    }
-
-    // Try to notify creator
-    creatorNotified := false
-    for _, player := range game.Players {
-        if player.Name == game.CreatorID {
-            log.Printf("Notifying creator %s about join request", game.CreatorID)
-            if err := player.Conn.WriteJSON(state); err != nil {
-                log.Printf("Failed to notify creator about new join request: %v", err)
-            } else {
-                creatorNotified = true
-            }
-            break
-        }
-    }
-
-    if !creatorNotified {
-        log.Printf("Warning: Could not notify creator about join request (creator may not be connected yet)")
-    }
-
-    log.Printf("Join request processed successfully for player: %s", req.Name)
+    // Send success response
+    log.Println("Sending success response")
+    w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
+    w.Write([]byte("{}"))
+    
+    // Release mutex before broadcasting
+    game.mu.Unlock()
+    
+    // Broadcast updates without holding any locks
+    log.Println("Broadcasting game state")
+    broadcastGameState(game)
+    
+    log.Println("Broadcasting available games")
+    broadcastAvailableGames()
+    
+    log.Println("Join request handling completed")
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
-    // Add required headers for Safari
     w.Header().Set("Access-Control-Allow-Origin", "*")
     w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-    // Handle preflight OPTIONS request
     if r.Method == "OPTIONS" {
         w.WriteHeader(http.StatusOK)
         return
@@ -359,11 +369,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Read initial message
     var msg struct {
-        Type     string `json:"type"`
-        GameID   string `json:"gameId"`
-        Name     string `json:"name"`
+        Type       string `json:"type"`
+        GameID     string `json:"gameId"`
+        Name       string `json:"name"`
         IsReconnect bool `json:"isReconnect"`
     }
 
@@ -373,7 +382,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // If no game ID is provided, this is a lobby connection
     if msg.GameID == "" {
         lobbyMutex.Lock()
         lobbyConnections[conn] = true
@@ -395,70 +403,68 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    log.Printf("Attempting to acquire game mutex in handleWebSocket for game %s", msg.GameID)
     game.mu.Lock()
-    defer game.mu.Unlock()
-
-    // Handle reconnection
+    
+    var player *Player
     if msg.IsReconnect {
         for _, p := range game.Players {
             if p.Name == msg.Name {
                 p.Conn = conn
-                // Send current game state
-                broadcastGameState(game)
-                go handleConnection(conn, game, p)
-                return
+                player = p
+                break
             }
         }
-    }
-
-    // For new connections, check if player has been admitted
-    if _, exists := game.JoinRequests[msg.Name]; exists {
-        player := &Player{
+    } else if _, exists := game.JoinRequests[msg.Name]; exists {
+        player = &Player{
             Name: msg.Name,
             Conn: conn,
         }
-
-        // Remove from join requests since they're now connecting
         delete(game.JoinRequests, msg.Name)
-        
-        // Add to active players
         game.Players = append(game.Players, player)
-        broadcastGameState(game)
-        go handleConnection(conn, game, player)
     } else if len(game.Players) == 0 {
-        // First player (creator) can always connect
-        player := &Player{
+        player = &Player{
             Name: msg.Name,
             Conn: conn,
         }
         game.CreatorID = msg.Name
         game.Players = append(game.Players, player)
-        broadcastGameState(game)
-        go handleConnection(conn, game, player)
-    } else {
-        // Player trying to connect without being admitted
+    }
+
+    if player == nil {
+        game.mu.Unlock()
         conn.WriteJSON(map[string]string{
             "type": "error",
             "message": "Not authorized to join this game",
         })
         conn.Close()
+        return
     }
+
+    game.mu.Unlock()
+    log.Printf("Released game mutex in handleWebSocket")
+
+    // Broadcast state after releasing the mutex
+    broadcastGameState(game)
+
+    // Start handling the connection without holding any locks
+    handleConnection(conn, game, player)
 }
 
 func handleConnection(conn *websocket.Conn, game *Game, player *Player) {
-	defer conn.Close()
+    defer conn.Close()
 
-	// Handle incoming messages
-	for {
-		var gameMsg GameMessage
-		if err := conn.ReadJSON(&gameMsg); err != nil {
-			if websocket.IsUnexpectedCloseError(err) {
-				handlePlayerDisconnect(game, player)
-			}
-			break
-		}
-		handleGameMessage(game, player, gameMsg)
-	}
+    // Handle incoming messages
+    for {
+        var gameMsg GameMessage
+        if err := conn.ReadJSON(&gameMsg); err != nil {
+            if websocket.IsUnexpectedCloseError(err) {
+                handlePlayerDisconnect(game, player)
+            }
+            break
+        }
+        handleGameMessage(game, player, gameMsg)
+    }
 }
 
 func validateSelection(game *Game, selection, category string) bool {
@@ -475,133 +481,138 @@ func validateSelection(game *Game, selection, category string) bool {
 
 func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     switch msg.Type {
-    // ...existing code...
     case "make_selection":
         var content struct {
             Selection string `json:"selection"`
             Category  string `json:"category"`
         }
-        json.Unmarshal(msg.Content, &content)
+        if err := json.Unmarshal(msg.Content, &content); err != nil {
+            log.Printf("Error unmarshaling selection: %v", err)
+            return
+        }
         
+        // Acquire mutex
         game.mu.Lock()
-        // Only allow selection if it's the player's turn and no challenge is active
-        if game.Players[game.CurrentPlayer].Name == player.Name && game.ChallengeState == nil {
-            // Validate the selection if this isn't the first move of a round
-            if !game.RoundStarted || validateSelection(game, content.Selection, content.Category) {
+        
+        // Check conditions under lock
+        canMakeSelection := game.Players[game.CurrentPlayer].Name == player.Name && game.ChallengeState == nil
+        roundStarted := game.RoundStarted
+        
+        if canMakeSelection {
+            validSelection := !roundStarted || validateSelection(game, content.Selection, content.Category)
+            if validSelection {
                 game.LastSelection = content.Selection
                 game.LastCategory = content.Category
                 game.UsedItems[content.Selection] = true
                 game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
                 game.RoundStarted = true
-                
-                // Broadcast success
+            }
+            
+            // Release mutex before broadcasting
+            game.mu.Unlock()
+            
+            if validSelection {
                 broadcastGameState(game)
             } else {
-                // Invalid selection during ongoing round
                 player.Conn.WriteJSON(map[string]string{
                     "type": "error",
-                    "message": "Invalid selection - connection not found",
+                    "message": "Invalid selection",
                 })
             }
+        } else {
+            game.mu.Unlock()
         }
-        game.mu.Unlock()
 
-    // ...existing code...
     case "start_game":
-		if player.Name == game.CreatorID && !game.InProgress {
-			game.InProgress = true
-			broadcastGameState(game)
-		}
-	case "challenge":
-		game.mu.Lock()
-		if game.RoundStarted && game.ChallengeState == nil {
-			previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
-			game.ChallengeState = &ChallengeState{
-				ChallengerName: player.Name,
-				ChallengedName: game.Players[previousPlayerIndex].Name,
-				ExpectedCategory: game.LastCategory,
-			}
-			game.CurrentPlayer = previousPlayerIndex
-		}
-		game.mu.Unlock()
-		broadcastGameState(game)
+        game.mu.Lock()
+        isCreator := player.Name == game.CreatorID
+        inProgress := game.InProgress
+        if isCreator && !inProgress {
+            game.InProgress = true
+            game.mu.Unlock()
+            broadcastGameState(game)
+        } else {
+            game.mu.Unlock()
+        }
 
-	case "give_up":
-		game.mu.Lock()
-		if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
-			// Add letter to challenged player
-			for i, p := range game.Players {
-				if p.Name == player.Name {
-					p.Letters++
-					if p.Letters >= 4 {
-						// Remove eliminated player
-						game.Players = append(game.Players[:i], game.Players[i+1:]...)
-					}
-					break
-				}
-			}
-			// Reset round
-			game.ChallengeState = nil
-			game.LastSelection = ""
-			game.LastCategory = ""
-			game.RoundStarted = false
-		}
-		game.mu.Unlock()
-		broadcastGameState(game)
+    case "challenge":
+        game.mu.Lock()
+        if game.RoundStarted && game.ChallengeState == nil {
+            previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
+            game.ChallengeState = &ChallengeState{
+                ChallengerName: player.Name,
+                ChallengedName: game.Players[previousPlayerIndex].Name,
+                ExpectedCategory: game.LastCategory,
+            }
+            game.CurrentPlayer = previousPlayerIndex
+            game.mu.Unlock()
+            broadcastGameState(game)
+        } else {
+            game.mu.Unlock()
+        }
 
-	case "challenge_success":
-		game.mu.Lock()
-		if game.ChallengeState != nil {
-			// Add letter to challenger
-			for i, p := range game.Players {
-				if p.Name == game.ChallengeState.ChallengerName {
-					p.Letters++
-					if p.Letters >= 4 {
-						// Remove eliminated player
-						game.Players = append(game.Players[:i], game.Players[i+1:]...)
-					}
-					break
-				}
-			}
-			// Reset round
-			game.ChallengeState = nil
-			game.LastSelection = ""
-			game.LastCategory = ""
-			game.RoundStarted = false
-		}
-		game.mu.Unlock()
-		broadcastGameState(game)
+    case "give_up":
+        game.mu.Lock()
+        if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
+            // Add letter to challenged player
+            for i, p := range game.Players {
+                if p.Name == player.Name {
+                    p.Letters++
+                    shouldRemove := p.Letters >= 4
+                    if shouldRemove {
+                        game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                    }
+                    break
+                }
+            }
+            // Reset round
+            game.ChallengeState = nil
+            game.LastSelection = ""
+            game.LastCategory = ""
+            game.RoundStarted = false
+            game.mu.Unlock()
+            broadcastGameState(game)
+        } else {
+            game.mu.Unlock()
+        }
 
-	case "admit_player":
+    case "admit_player":
         var content struct {
             PlayerName string `json:"playerName"`
         }
-        json.Unmarshal(msg.Content, &content)
+        if err := json.Unmarshal(msg.Content, &content); err != nil {
+            log.Printf("Error unmarshaling admit player: %v", err)
+            return
+        }
         
         game.mu.Lock()
-        if player.Name == game.CreatorID && !game.InProgress {
-            // Only delete from JoinRequests if the player hasn't connected yet
-            if _, exists := game.JoinRequests[content.PlayerName]; exists {
-                // Leave request in place until player connects via WebSocket
-                // The actual player addition happens in handleWebSocket
-                // Just notify the waiting player that they've been admitted
-                broadcastGameState(game)
-            }
+        isCreator := player.Name == game.CreatorID
+        inProgress := game.InProgress
+        _, requestExists := game.JoinRequests[content.PlayerName]
+        
+        if isCreator && !inProgress && requestExists {
+            game.mu.Unlock()
+            broadcastGameState(game)
+        } else {
+            game.mu.Unlock()
         }
-        game.mu.Unlock()
 
     case "reject_player":
         var content struct {
             PlayerName string `json:"playerName"`
         }
-        json.Unmarshal(msg.Content, &content)
+        if err := json.Unmarshal(msg.Content, &content); err != nil {
+            log.Printf("Error unmarshaling reject player: %v", err)
+            return
+        }
         
         game.mu.Lock()
         if player.Name == game.CreatorID {
             if _, exists := game.JoinRequests[content.PlayerName]; exists {
                 delete(game.JoinRequests, content.PlayerName)
-                // Notify the rejected player
+                game.mu.Unlock()
                 broadcastGameState(game)
+                return
             }
         }
         game.mu.Unlock()
@@ -609,25 +620,35 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     case "start_turn":
         game.mu.Lock()
         if game.Players[game.CurrentPlayer].Name == player.Name {
+            game.mu.Unlock()
             startTimer(game)
+        } else {
+            game.mu.Unlock()
         }
-        game.mu.Unlock()
     }
 
-	// Check for game end
-	if len(game.Players) == 1 {
-		// Notify winner
-		for _, p := range game.Players {
-			p.Conn.WriteJSON(map[string]string{
-				"type": "game_won",
-				"winner": p.Name,
-			})
-		}
-		// Remove game
-		gamesMutex.Lock()
-		delete(games, game.ID)
-		gamesMutex.Unlock()
-	}
+    // Check for game end
+    game.mu.Lock()
+    if len(game.Players) == 1 {
+        // Get winner under lock
+        winner := game.Players[0].Name
+        game.mu.Unlock()
+        
+        // Notify winner without holding the lock
+        for _, p := range game.Players {
+            p.Conn.WriteJSON(map[string]string{
+                "type": "game_won",
+                "winner": winner,
+            })
+        }
+        
+        // Remove game from global state
+        gamesMutex.Lock()
+        delete(games, game.ID)
+        gamesMutex.Unlock()
+    } else {
+        game.mu.Unlock()
+    }
 }
 
 func startTimer(game *Game) {
@@ -710,49 +731,83 @@ func handlePlayerDisconnect(game *Game, player *Player) {
 }
 
 func broadcastGameState(game *Game) {
-	game.mu.Lock()
-	defer game.mu.Unlock()
+    // Make a copy of the state under lock
+    game.mu.Lock()
+    state := struct {
+        Type    string `json:"type"`
+        Game    *Game  `json:"game"`
+    }{
+        Type: "game_state",
+        Game: &Game{
+            ID:            game.ID,
+            Players:       make([]*Player, len(game.Players)),
+            CreatorID:     game.CreatorID,
+            InProgress:    game.InProgress,
+            CurrentPlayer: game.CurrentPlayer,
+            LastSelection: game.LastSelection,
+            LastCategory:  game.LastCategory,
+            UsedItems:     make(map[string]bool),
+            ChallengeState: game.ChallengeState,
+            RoundStarted:   game.RoundStarted,
+            JoinRequests:   make(map[string]JoinRequest),
+            TimeLeft:       game.TimeLeft,
+        },
+    }
 
-	state := struct {
-		Type    string `json:"type"`
-		Game    *Game  `json:"game"`
-	}{
-		Type: "game_state",
-		Game: game,
-	}
+    // Copy players
+    copy(state.Game.Players, game.Players)
+    
+    // Copy maps
+    for k, v := range game.UsedItems {
+        state.Game.UsedItems[k] = v
+    }
+    for k, v := range game.JoinRequests {
+        state.Game.JoinRequests[k] = v
+    }
 
-	var failedPlayers []*Player
-	for _, player := range game.Players {
-		// Try to send the state up to 3 times
-		var err error
-		for attempts := 0; attempts < 3; attempts++ {
-			if err = player.Conn.WriteJSON(state); err == nil {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		if err != nil {
-			log.Printf("Error broadcasting to player %s after retries: %v", player.Name, err)
-			failedPlayers = append(failedPlayers, player)
-		}
-	}
+    // Get players list while under lock
+    players := make([]*Player, len(game.Players))
+    copy(players, game.Players)
+    
+    game.mu.Unlock()
 
-	// Remove players who couldn't receive the update
-	for _, failedPlayer := range failedPlayers {
-		for i, p := range game.Players {
-			if p == failedPlayer {
-				game.Players = append(game.Players[:i], game.Players[i+1:]...)
-				// If this was the creator, end the game
-				if failedPlayer.Name == game.CreatorID {
-					gamesMutex.Lock()
-					delete(games, game.ID)
-					gamesMutex.Unlock()
-					return
-				}
-				break
-			}
-		}
-	}
+    // Broadcast without holding the lock
+    var failedPlayers []*Player
+    for _, player := range players {
+        var err error
+        for attempts := 0; attempts < 3; attempts++ {
+            if err = player.Conn.WriteJSON(state); err == nil {
+                break
+            }
+            time.Sleep(100 * time.Millisecond)
+        }
+        if err != nil {
+            log.Printf("Error broadcasting to player %s after retries: %v", player.Name, err)
+            failedPlayers = append(failedPlayers, player)
+        }
+    }
+
+    // Re-acquire lock to remove failed players
+    if len(failedPlayers) > 0 {
+        game.mu.Lock()
+        for _, failedPlayer := range failedPlayers {
+            for i, p := range game.Players {
+                if p == failedPlayer {
+                    game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                    // If this was the creator, end the game
+                    if failedPlayer.Name == game.CreatorID {
+                        gamesMutex.Lock()
+                        delete(games, game.ID)
+                        gamesMutex.Unlock()
+                        game.mu.Unlock()
+                        return
+                    }
+                    break
+                }
+            }
+        }
+        game.mu.Unlock()
+    }
 }
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
