@@ -251,7 +251,9 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleJoinGame(w http.ResponseWriter, r *http.Request) {
+    log.Println("Received join-game request")
     if r.Method != http.MethodPost {
+        log.Printf("Invalid method: %s", r.Method)
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
     }
@@ -262,40 +264,49 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
         Message string `json:"message"`
     }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        log.Printf("Failed to decode request body: %v", err)
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
 
+    log.Printf("Join request decoded: gameID=%s, name=%s", req.GameID, req.Name)
+
     if req.GameID == "" || req.Name == "" {
+        log.Println("Missing required fields")
         http.Error(w, "GameID and Name are required", http.StatusBadRequest)
         return
     }
 
     gamesMutex.Lock()
     game, exists := games[req.GameID]
+    gamesMutex.Unlock()
+    
     if !exists {
-        gamesMutex.Unlock()
+        log.Printf("Game not found: %s", req.GameID)
         http.Error(w, "Game not found", http.StatusNotFound)
         return
     }
-    gamesMutex.Unlock()
 
+    log.Printf("Found game %s, acquiring game mutex", req.GameID)
     game.mu.Lock()
     defer game.mu.Unlock()
 
     // Check if player name is already taken
     for _, player := range game.Players {
         if player.Name == req.Name {
+            log.Printf("Player name already taken: %s", req.Name)
             http.Error(w, "Player name already taken", http.StatusConflict)
             return
         }
     }
 
     if game.InProgress {
+        log.Println("Cannot join - game already in progress")
         http.Error(w, "Game already in progress", http.StatusBadRequest)
         return
     }
 
+    log.Printf("Adding join request for player: %s", req.Name)
     // Add join request
     game.JoinRequests[req.Name] = JoinRequest{Name: req.Name, Message: req.Message}
 
@@ -309,15 +320,24 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
     }
 
     // Try to notify creator
+    creatorNotified := false
     for _, player := range game.Players {
         if player.Name == game.CreatorID {
+            log.Printf("Notifying creator %s about join request", game.CreatorID)
             if err := player.Conn.WriteJSON(state); err != nil {
                 log.Printf("Failed to notify creator about new join request: %v", err)
+            } else {
+                creatorNotified = true
             }
             break
         }
     }
 
+    if !creatorNotified {
+        log.Printf("Warning: Could not notify creator about join request (creator may not be connected yet)")
+    }
+
+    log.Printf("Join request processed successfully for player: %s", req.Name)
     w.WriteHeader(http.StatusOK)
 }
 
