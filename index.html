@@ -135,7 +135,10 @@
             // Reset reconnection attempts on successful connection
             gameState.reconnectAttempts = 0
             gameState.shouldReconnect = true
+            gameState.playerName = playerName
+            gameState.id = gameId
 
+            // Send initial connection message
             ws.send(
               JSON.stringify({
                 type: "connect",
@@ -149,13 +152,13 @@
           ws.onerror = (error) => {
             console.error("WebSocket error:", error)
             if (ws.readyState !== WebSocket.OPEN) {
-              // If the connection failed to open, try to reconnect
               handleReconnection()
             }
           }
 
           ws.onmessage = (event) => {
             const message = JSON.parse(event.data)
+            console.log("Received message:", message) // Add logging
             handleWebSocketMessage(message)
           }
 
@@ -227,6 +230,7 @@
       }
 
       function updateGameState(game) {
+        console.log({ game })
         // Update player status display
         const statusDiv = document.getElementById("player-status")
         const waitingRoom = document.getElementById("waiting-room")
@@ -238,29 +242,29 @@
         playersList.innerHTML = ""
 
         // Always update the players list when we have players
-        game.Players.forEach((player) => {
+        game.players.forEach((player) => {
           const li = document.createElement("li")
-          li.textContent = `${player.Name}${
-            player.Name === game.CreatorID ? " (Creator)" : ""
+          li.textContent = `${player.name}${
+            player.name === game.creatorId ? " (Creator)" : ""
           }`
           // Add BOMB letters if any
-          if (player.Letters > 0) {
-            const letters = "BOMB".slice(0, player.Letters)
+          if (player.letters > 0) {
+            const letters = "BOMB".slice(0, player.letters)
             li.textContent += ` [${letters}]`
           }
           playersList.appendChild(li)
         })
 
         // Update isCreator flag based on game state
-        gameState.isCreator = game.CreatorID === gameState.playerName
+        gameState.isCreator = game.creatorId === gameState.playerName
 
-        if (game.InProgress) {
+        if (game.inProgress) {
           statusDiv.classList.remove("hidden")
           waitingRoom.classList.add("hidden")
           gameArea.classList.remove("hidden")
 
           // Update current player display
-          const currentPlayerName = game.Players[game.CurrentPlayer]?.Name
+          const currentPlayerName = game.players[game.currentPlayer]?.name
           document.getElementById("current-player").textContent =
             currentPlayerName || ""
 
@@ -268,9 +272,9 @@
           const challengeBtn = document.getElementById("challenge")
           const giveUpBtn = document.getElementById("give-up")
 
-          if (game.ChallengeState) {
+          if (game.challengeState) {
             challengeBtn.classList.add("hidden")
-            if (game.ChallengeState.ChallengedName === gameState.playerName) {
+            if (game.challengeState.challengedName === gameState.playerName) {
               giveUpBtn.classList.remove("hidden")
             } else {
               giveUpBtn.classList.add("hidden")
@@ -279,7 +283,7 @@
             giveUpBtn.classList.add("hidden")
             if (
               currentPlayerName !== gameState.playerName &&
-              game.RoundStarted
+              game.roundStarted
             ) {
               challengeBtn.classList.remove("hidden")
             } else {
@@ -290,7 +294,7 @@
           statusDiv.classList.add("hidden")
           waitingRoom.classList.remove("hidden")
           gameArea.classList.add("hidden")
-          document.getElementById("game-id-display").textContent = game.ID
+          document.getElementById("game-id-display").textContent = game.id
 
           // Update creator controls
           if (gameState.isCreator) {
@@ -300,15 +304,15 @@
             const requestsDiv = document.getElementById("join-requests")
             requestsDiv.innerHTML = ""
 
-            Object.entries(game.JoinRequests || {}).forEach(
+            Object.entries(game.joinRequests || {}).forEach(
               ([name, request]) => {
                 const requestDiv = document.createElement("div")
                 requestDiv.className = "join-request"
                 requestDiv.innerHTML = `
                         <p><strong>${name}</strong></p>
                         ${
-                          request.Message
-                            ? `<p>Message: ${request.Message}</p>`
+                          request.message
+                            ? `<p>Message: ${request.message}</p>`
                             : ""
                         }
                         <button onclick="handleJoinRequest('${name}', true)">Admit</button>
@@ -320,7 +324,7 @@
 
             // Update start button - enable only if there are 2 or more players
             const startButton = document.getElementById("start-game-btn")
-            startButton.disabled = game.Players.length < 2
+            startButton.disabled = game.players.length < 2
           } else {
             creatorControls.classList.add("hidden")
           }
@@ -542,17 +546,24 @@
       }
 
       function updateGamesList(games) {
-        const gamesList = document.getElementById("games")
+        const gamesList = document.getElementById("games-list")
         gamesList.innerHTML = ""
         games.forEach((gameId) => {
           const li = document.createElement("li")
           const joinButton = document.createElement("button")
           joinButton.textContent = "Join Game"
-          joinButton.onclick = () => joinGame(gameId)
+          joinButton.onclick = () => {
+            joinGame(gameId)
+          }
           li.textContent = `Game: ${gameId} `
           li.appendChild(joinButton)
           gamesList.appendChild(li)
         })
+      }
+
+      function joinGame(gameId) {
+        localStorage.setItem("gameId", gameId)
+        location.reload()
       }
 
       // Initialize WebSocket connection when page loads

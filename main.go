@@ -219,35 +219,36 @@ func main() {
 }
 
 func handleCreateGame(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
 
-	var req struct {
-		CreatorName string `json:"creatorName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+    var req struct {
+        CreatorName string `json:"creatorName"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
 
-	gameID := uuid.New().String()
-	game := &Game{
-		ID:           gameID,
-		Players:      make([]*Player, 0),
-		UsedItems:    make(map[string]bool),
-		JoinRequests: make(map[string]JoinRequest),
-	}
+    gameID := uuid.New().String()
+    game := &Game{
+        ID:           gameID,
+        CreatorID:    req.CreatorName,  // Set creator ID when creating game
+        Players:      make([]*Player, 0),
+        UsedItems:    make(map[string]bool),
+        JoinRequests: make(map[string]JoinRequest),
+    }
 
-	gamesMutex.Lock()
-	games[gameID] = game
-	gamesMutex.Unlock()
+    gamesMutex.Lock()
+    games[gameID] = game
+    gamesMutex.Unlock()
 
-	// Broadcast updated game list to lobby
-	broadcastAvailableGames()
+    // Broadcast updated game list to lobby
+    broadcastAvailableGames()
 
-	json.NewEncoder(w).Encode(map[string]string{"gameId": gameID})
+    json.NewEncoder(w).Encode(map[string]string{"gameId": gameID})
 }
 
 func handleJoinGame(w http.ResponseWriter, r *http.Request) {
@@ -277,8 +278,6 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // First acquire gamesMutex to get the game
-    log.Printf("Acquiring games mutex to find game %s", req.GameID)
     gamesMutex.Lock()
     game, exists := games[req.GameID]
     if !exists {
@@ -288,69 +287,44 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
         return
     }
     gamesMutex.Unlock()
-    
-    // Then acquire game mutex with timeout
-    log.Printf("Attempting to acquire game mutex for game %s", req.GameID)
-    lockAcquired := make(chan struct{})
-    var lockTimeout bool
-    
-    go func() {
-        game.mu.Lock()
-        close(lockAcquired)
-    }()
 
-    select {
-    case <-lockAcquired:
-        log.Printf("Successfully acquired game mutex for game %s", req.GameID)
-    case <-time.After(5 * time.Second):
-        lockTimeout = true
-        log.Printf("Timeout waiting for game mutex for game %s", req.GameID)
-        http.Error(w, "Server busy, please try again", http.StatusServiceUnavailable)
-        return
-    }
-
-    if lockTimeout {
+    game.mu.Lock()
+    // Check if game is already in progress
+    if game.InProgress {
+        game.mu.Unlock()
+        http.Error(w, "Game already in progress", http.StatusBadRequest)
         return
     }
 
     // Check if player name is already taken
     for _, player := range game.Players {
         if player.Name == req.Name {
-            log.Printf("Player name already taken: %s", req.Name)
             game.mu.Unlock()
             http.Error(w, "Player name already taken", http.StatusConflict)
             return
         }
     }
 
-    if game.InProgress {
-        log.Println("Cannot join - game already in progress")
-        game.mu.Unlock()
-        http.Error(w, "Game already in progress", http.StatusBadRequest)
-        return
+    // Add join request if not the creator
+    if game.CreatorID != req.Name {
+        game.JoinRequests[req.Name] = JoinRequest{Name: req.Name, Message: req.Message}
+    } else {
+        // If it's the creator, add them directly to players
+        game.Players = append(game.Players, &Player{
+            Name: req.Name,
+            IsActive: true,
+        })
     }
-
-    // Add join request
-    log.Printf("Adding join request for player: %s", req.Name)
-    game.JoinRequests[req.Name] = JoinRequest{Name: req.Name, Message: req.Message}
+    game.mu.Unlock()
 
     // Send success response
-    log.Println("Sending success response")
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
-    w.Write([]byte("{}"))
-    
-    // Release mutex before broadcasting
-    game.mu.Unlock()
-    
-    // Broadcast updates without holding any locks
-    log.Println("Broadcasting game state")
+    json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+
+    // Broadcast updates after releasing locks
     broadcastGameState(game)
-    
-    log.Println("Broadcasting available games")
     broadcastAvailableGames()
-    
-    log.Println("Join request handling completed")
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -381,6 +355,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         conn.Close()
         return
     }
+
+    log.Printf("Received WebSocket message: %+v", msg)
 
     if msg.GameID == "" {
         lobbyMutex.Lock()
@@ -415,19 +391,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
                 break
             }
         }
+    } else if len(game.Players) == 0 && msg.Name == game.CreatorID {
+        // First player joining must be the creator
+        player = &Player{
+            Name: msg.Name,
+            Conn: conn,
+        }
+        game.Players = append(game.Players, player)
     } else if _, exists := game.JoinRequests[msg.Name]; exists {
         player = &Player{
             Name: msg.Name,
             Conn: conn,
         }
         delete(game.JoinRequests, msg.Name)
-        game.Players = append(game.Players, player)
-    } else if len(game.Players) == 0 {
-        player = &Player{
-            Name: msg.Name,
-            Conn: conn,
-        }
-        game.CreatorID = msg.Name
         game.Players = append(game.Players, player)
     }
 
