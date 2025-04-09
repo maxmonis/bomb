@@ -143,9 +143,6 @@
             instructionText.textContent = `Name a movie starring ${lastSelection}`
             lastCategory = "movie"
           }
-          document.querySelector(
-            "#search-bar"
-          ).placeholder = `Search ${lastCategory}s`
           document.getElementById("category-selection").style.display = "none"
           document.getElementById("challenge").style.display =
             challengeOccurredThisRound ? "none" : "block"
@@ -154,7 +151,14 @@
           document.getElementById("challenge").style.display = "none"
           document.getElementById("instruction-text").textContent = ""
           challengeOccurredThisRound = false
+          lastCategory = "movie"
         }
+        document.querySelectorAll('input[name="category"]').forEach((radio) => {
+          radio.checked = radio.value === lastCategory
+        })
+        document.querySelector(
+          "#search-bar"
+        ).placeholder = `Search ${lastCategory}s`
 
         startCountdown()
       }
@@ -179,6 +183,15 @@
         alert(`${players[currentPlayerIndex].name} ran out of time!`)
         addLetterToPlayer(currentPlayerIndex)
         nextTurn()
+      }
+
+      function reset() {
+        clearInterval(countdownInterval)
+        document.getElementById("category-selection").style.display = "block"
+        document.getElementById("challenge").style.display = "none"
+        document.getElementById("instruction-text").textContent = ""
+        challengeOccurredThisRound = false
+        clearInput()
       }
 
       function clearInput() {
@@ -218,7 +231,7 @@
         document.getElementById("challenge").style.display = "none"
 
         const isValid = confirm(
-          `${previousPlayer.name}, can you provide a valid ${lastCategory === 'movie' ? 'actor' : 'movie'}?`
+          `${previousPlayer.name}, can you provide a valid ${lastCategory}?`
         )
 
         if (isValid) {
