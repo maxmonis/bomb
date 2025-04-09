@@ -9,7 +9,7 @@
         font-size: 2em;
         color: red;
       }
-      #game-area {
+      .hidden {
         display: none;
       }
       .player-status {
@@ -27,31 +27,56 @@
       .bomb-letter.red {
         color: red;
       }
+      #join-requests {
+        margin: 20px 0;
+      }
+      .join-request {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ccc;
+      }
     </style>
   </head>
   <body>
     <h1>BOMB Game</h1>
 
-    <div class="player-status" id="player-status">
+    <div id="lobby" class="hidden">
+      <h2>Game Lobby</h2>
+      <div id="create-game">
+        <h3>Create New Game</h3>
+        <input type="text" id="creator-name" placeholder="Enter your name" />
+        <button id="create-game-btn">Create Game</button>
+      </div>
+      <div id="join-game">
+        <h3>Join Game</h3>
+        <input type="text" id="game-id" placeholder="Enter game ID" />
+        <input type="text" id="player-name" placeholder="Enter your name" />
+        <input
+          type="text"
+          id="join-message"
+          placeholder="Message to creator (optional)"
+        />
+        <button id="join-game-btn">Join Game</button>
+      </div>
+    </div>
+
+    <div id="waiting-room" class="hidden">
+      <h2>Waiting Room</h2>
+      <p>Game ID: <span id="game-id-display"></span></p>
+      <h3>Players:</h3>
+      <ul id="players-list"></ul>
+      <div id="creator-controls" class="hidden">
+        <h3>Join Requests:</h3>
+        <div id="join-requests"></div>
+        <button id="start-game-btn" disabled>Start Game</button>
+      </div>
+    </div>
+
+    <div class="player-status hidden" id="player-status">
       <!-- Player statuses will be dynamically added here -->
     </div>
 
-    <div id="setup-area">
-      <h2>Setup</h2>
-      <label for="player-count">Number of Players:</label>
-      <input
-        type="number"
-        id="player-count"
-        min="2"
-        max="4"
-        required
-        value="2"
-      />
-      <div id="player-names"></div>
-      <button id="start-game">Start Game</button>
-    </div>
-
-    <div id="game-area">
+    <div id="game-area" class="hidden">
       <h2>Current Player: <span id="current-player"></span></h2>
       <div id="countdown">30</div>
       <div id="category-selection">
@@ -64,305 +89,363 @@
         >
       </div>
       <p id="instruction-text"></p>
-      <input type="text" id="search-bar" placeholder="Search movies" />
+      <input
+        type="text"
+        id="search-bar"
+        placeholder="Search for a movie or actor"
+      />
       <button id="search-button">Search</button>
       <ul id="search-results"></ul>
-      <button id="challenge">Challenge</button>
-      <button id="give-up" style="display: none">Give Up</button>
+      <button id="challenge" class="hidden">Challenge</button>
+      <button id="give-up" class="hidden">Give Up</button>
       <ul id="used-items"></ul>
     </div>
 
     <script>
-      let players = []
-      let currentPlayerIndex = 0
-      let countdownInterval
-      let usedItems = new Set()
-      let lastSelection = null
-      let lastCategory = "movie"
-      let challengeOccurredThisRound = false
-      const bombLetters = ["B", "O", "M", "B"]
+      let ws
+      let gameState = {
+        id: null,
+        playerName: null,
+        isCreator: false,
+        usedItems: new Set(),
+      }
 
-      document.getElementById("start-game").addEventListener("click", () => {
-        const playerCount = parseInt(
-          document.getElementById("player-count").value
-        )
-        if (isNaN(playerCount) || playerCount < 2 || playerCount > 4) {
-          alert("Please enter a valid number of players (2-4).")
-          return
+      // Check for existing game in localStorage on page load
+      window.addEventListener("load", () => {
+        const savedGameId = localStorage.getItem("gameId")
+        if (savedGameId) {
+          reconnectToGame()
+        } else {
+          document.getElementById("lobby").classList.remove("hidden")
+        }
+      })
+
+      function connectToGame(gameId, playerName) {
+        ws = new WebSocket(`ws://${window.location.host}/ws`)
+
+        ws.onopen = () => {
+          ws.send(
+            JSON.stringify({
+              type: "connect",
+              gameId: gameId,
+              name: playerName,
+            })
+          )
         }
 
-        players = []
-        for (let i = 0; i < playerCount; i++) {
-          const playerName = prompt(`Enter name for Player ${i + 1}:`)
-          if (!playerName) {
-            alert("Player name cannot be empty.")
+        ws.onmessage = (event) => {
+          const message = JSON.parse(event.data)
+          handleWebSocketMessage(message)
+        }
+
+        ws.onclose = () => {
+          // Try to reconnect if game is still active
+          setTimeout(() => {
+            if (gameState.id) {
+              connectToGame(gameState.id, gameState.playerName)
+            }
+          }, 1000)
+        }
+      }
+
+      function handleWebSocketMessage(message) {
+        switch (message.type) {
+          case "game_state":
+            updateGameState(message.game)
+            break
+          case "game_ended":
+            handleGameEnded(message)
+            break
+          case "error":
+            alert(message.message)
+            break
+        }
+      }
+
+      function updateGameState(game) {
+        // Update player status display
+        const statusDiv = document.getElementById("player-status")
+        if (game.InProgress) {
+          statusDiv.classList.remove("hidden")
+          statusDiv.innerHTML = ""
+          game.Players.forEach((player) => {
+            const playerDiv = document.createElement("div")
+            playerDiv.className = "player"
+            playerDiv.innerHTML = `<strong>${player.Name}</strong><br>`
+            ;["B", "O", "M", "B"].forEach((letter, i) => {
+              const span = document.createElement("span")
+              span.className = `bomb-letter${i < player.Letters ? " red" : ""}`
+              span.textContent = letter
+              playerDiv.appendChild(span)
+            })
+            statusDiv.appendChild(playerDiv)
+          })
+        }
+
+        // Update waiting room
+        if (!game.InProgress) {
+          document.getElementById("waiting-room").classList.remove("hidden")
+          document.getElementById("game-area").classList.add("hidden")
+
+          // Update players list
+          const playersList = document.getElementById("players-list")
+          playersList.innerHTML = ""
+          game.Players.forEach((player) => {
+            const li = document.createElement("li")
+            li.textContent = `${player.Name}${
+              player.Name === game.CreatorID ? " (Creator)" : ""
+            }`
+            playersList.appendChild(li)
+          })
+
+          // Update creator controls
+          if (gameState.playerName === game.CreatorID) {
+            const creatorControls = document.getElementById("creator-controls")
+            creatorControls.classList.remove("hidden")
+
+            // Update join requests
+            const requestsDiv = document.getElementById("join-requests")
+            requestsDiv.innerHTML = ""
+            Object.entries(game.JoinRequests || {}).forEach(
+              ([name, request]) => {
+                const requestDiv = document.createElement("div")
+                requestDiv.className = "join-request"
+                requestDiv.innerHTML = `
+                <p><strong>${name}</strong></p>
+                ${request.Message ? `<p>Message: ${request.Message}</p>` : ""}
+                <button onclick="handleJoinRequest('${name}', true)">Admit</button>
+                <button onclick="handleJoinRequest('${name}', false)">Reject</button>
+              `
+                requestsDiv.appendChild(requestDiv)
+              }
+            )
+
+            // Update start button
+            document.getElementById("start-game-btn").disabled =
+              game.Players.length < 2
+          }
+        }
+
+        // Update game area
+        if (game.InProgress) {
+          document.getElementById("waiting-room").classList.add("hidden")
+          document.getElementById("game-area").classList.remove("hidden")
+
+          const isMyTurn =
+            game.Players[game.CurrentPlayer]?.Name === gameState.playerName
+          document.getElementById("current-player").textContent =
+            game.Players[game.CurrentPlayer]?.Name || ""
+          document.getElementById("search-bar").disabled = !isMyTurn
+          document.getElementById("search-button").disabled = !isMyTurn
+
+          // Update challenge button visibility
+          const challengeBtn = document.getElementById("challenge")
+          challengeBtn.classList.toggle(
+            "hidden",
+            !game.RoundStarted || game.ChallengeState !== null
+          )
+
+          // Update give-up button visibility
+          const giveUpBtn = document.getElementById("give-up")
+          giveUpBtn.classList.toggle(
+            "hidden",
+            !game.ChallengeState ||
+              game.ChallengeState?.ChallengedName !== gameState.playerName
+          )
+
+          // Update category selection and instructions
+          if (game.LastSelection) {
+            document
+              .getElementById("category-selection")
+              .classList.add("hidden")
+            document.getElementById("instruction-text").textContent =
+              game.LastCategory === "movie"
+                ? `Name another actor from ${game.LastSelection}`
+                : `Name another movie starring ${game.LastSelection}`
+          } else if (!game.ChallengeState) {
+            document
+              .getElementById("category-selection")
+              .classList.remove("hidden")
+            document.getElementById("instruction-text").textContent = ""
+          }
+
+          // Update countdown
+          if (typeof game.TimeLeft === "number") {
+            document.getElementById("countdown").textContent = game.TimeLeft
+          }
+        }
+      }
+
+      function reconnectToGame() {
+        const playerName = localStorage.getItem("playerName")
+        const gameId = localStorage.getItem("gameId")
+        if (playerName && gameId) {
+          gameState.playerName = playerName
+          gameState.id = gameId
+          connectToGame(gameId, playerName)
+
+          document.getElementById("lobby").classList.add("hidden")
+          document.getElementById("waiting-room").classList.remove("hidden")
+          document.getElementById("game-id-display").textContent = gameId
+        } else {
+          document.getElementById("lobby").classList.remove("hidden")
+        }
+      }
+
+      function handleJoinRequest(playerName, isAdmitted) {
+        ws.send(
+          JSON.stringify({
+            type: isAdmitted ? "admit_player" : "reject_player",
+            content: { playerName },
+          })
+        )
+      }
+
+      // Event Listeners
+      document
+        .getElementById("create-game-btn")
+        .addEventListener("click", async () => {
+          const creatorName = document
+            .getElementById("creator-name")
+            .value.trim()
+          if (!creatorName) {
+            alert("Please enter your name")
             return
           }
-          players.push({ name: playerName, letters: 0 })
-        }
 
-        updatePlayerStatus()
-        document.getElementById("setup-area").style.display = "none"
-        document.getElementById("game-area").style.display = "block"
-        document.getElementById("category-selection").style.display = "block"
-        startTurn()
-      })
+          const response = await fetch("/create-game", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ creatorName }),
+          })
 
-      function updatePlayerStatus() {
-        const playerStatusDiv = document.getElementById("player-status")
-        playerStatusDiv.innerHTML = ""
-        players.forEach((player) => {
-          const playerDiv = document.createElement("div")
-          playerDiv.className = "player"
-          playerDiv.innerHTML = `<strong>${player.name}</strong><br>`
-          for (let i = 0; i < 4; i++) {
-            const letterSpan = document.createElement("span")
-            letterSpan.className = "bomb-letter"
-            if (i < player.letters) {
-              letterSpan.classList.add("red")
+          const data = await response.json()
+          gameState.id = data.gameId
+          gameState.isCreator = true
+          gameState.playerName = creatorName
+
+          // Save to localStorage
+          localStorage.setItem("gameId", gameState.id)
+          localStorage.setItem("playerName", creatorName)
+
+          document.getElementById("game-id-display").textContent = gameState.id
+          document.getElementById("lobby").classList.add("hidden")
+          document.getElementById("waiting-room").classList.remove("hidden")
+
+          connectToGame(gameState.id, creatorName)
+        })
+
+      document
+        .getElementById("join-game-btn")
+        .addEventListener("click", async () => {
+          const gameId = document.getElementById("game-id").value.trim()
+          const playerName = document.getElementById("player-name").value.trim()
+          const message = document.getElementById("join-message").value.trim()
+
+          if (!gameId || !playerName) {
+            alert("Please enter both game ID and your name")
+            return
+          }
+
+          try {
+            const response = await fetch("/join-game", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ gameId, name: playerName, message }),
+            })
+
+            if (response.ok) {
+              gameState.id = gameId
+              gameState.playerName = playerName
+
+              // Save to localStorage
+              localStorage.setItem("gameId", gameId)
+              localStorage.setItem("playerName", playerName)
+
+              document.getElementById("lobby").classList.add("hidden")
+              document.getElementById("waiting-room").classList.remove("hidden")
+              document.getElementById("game-id-display").textContent = gameId
+
+              connectToGame(gameId, playerName)
+            } else {
+              const error = await response.text()
+              alert(error)
             }
-            letterSpan.textContent = bombLetters[i]
-            playerDiv.appendChild(letterSpan)
+          } catch (error) {
+            alert("Failed to join game")
           }
-          playerStatusDiv.appendChild(playerDiv)
         })
-      }
 
-      function startTurn() {
-        clearInput()
-        const currentPlayer = players[currentPlayerIndex]
-        document.getElementById("current-player").textContent =
-          currentPlayer.name
-
-        if (lastSelection) {
-          const instructionText = document.getElementById("instruction-text")
-          if (lastCategory === "movie") {
-            instructionText.textContent = `Name an actor from ${lastSelection}`
-            lastCategory = "actor"
-          } else {
-            instructionText.textContent = `Name a movie starring ${lastSelection}`
-            lastCategory = "movie"
-          }
-          document.getElementById("category-selection").style.display = "none"
-          document.getElementById("challenge").style.display =
-            challengeOccurredThisRound ? "none" : "block"
-        } else {
-          document.getElementById("category-selection").style.display = "block"
-          document.getElementById("challenge").style.display = "none"
-          document.getElementById("instruction-text").textContent = ""
-          challengeOccurredThisRound = false
-          lastCategory = "movie"
-        }
-        document.querySelectorAll('input[name="category"]').forEach((radio) => {
-          radio.checked = radio.value === lastCategory
-        })
-        document.querySelector(
-          "#search-bar"
-        ).placeholder = `Search ${lastCategory}s`
-
-        startCountdown()
-      }
-
-      function startCountdown() {
-        let timeLeft = 30
-        document.getElementById("countdown").textContent = timeLeft
-
-        clearInterval(countdownInterval)
-        countdownInterval = setInterval(() => {
-          timeLeft--
-          document.getElementById("countdown").textContent = timeLeft
-
-          if (timeLeft <= 0) {
-            clearInterval(countdownInterval)
-            handleTimeout()
-          }
-        }, 1000)
-      }
-
-      function handleTimeout() {
-        alert(`${players[currentPlayerIndex].name} ran out of time!`)
-        addLetterToPlayer(currentPlayerIndex)
-        nextTurn()
-      }
-
-      function reset() {
-        clearInterval(countdownInterval)
-        document.getElementById("category-selection").style.display = "block"
-        document.getElementById("challenge").style.display = "none"
-        document.getElementById("instruction-text").textContent = ""
-        challengeOccurredThisRound = false
-        clearInput()
-      }
-
-      function clearInput() {
-        document.getElementById("search-bar").value = ""
-        document.getElementById("search-results").innerHTML = ""
-      }
-
-      document.querySelectorAll('input[name="category"]').forEach((radio) => {
-        radio.addEventListener("change", () => {
-          lastCategory = radio.value
-          document.querySelector(
-            "#search-bar"
-          ).placeholder = `Search ${radio.value}s`
-        })
-      })
-
-      document.getElementById("challenge").addEventListener("click", () => {
-        challengeOccurredThisRound = true
-
-        // Reset timer to 30 seconds
-        clearInterval(countdownInterval)
-        startCountdown()
-
-        const previousPlayerIndex =
-          (currentPlayerIndex - 1 + players.length) % players.length
-        const previousPlayer = players[previousPlayerIndex]
-        const challengingPlayerIndex = currentPlayerIndex
-
-        // Set the previous player as the active player for the challenge
-        currentPlayerIndex = previousPlayerIndex
-        document.getElementById("current-player").textContent =
-          previousPlayer.name
-
-        // Show give up button during challenge
-        document.getElementById("give-up").style.display = "block"
-        document.getElementById("category-selection").style.display = "none"
-        document.getElementById("challenge").style.display = "none"
-
-        const isValid = confirm(
-          `${previousPlayer.name}, can you provide a valid ${lastCategory}?`
-        )
-
-        if (isValid) {
-          // Let the challenged player make their selection first
-          // The letter will be assigned to the challenging player after a valid selection
-          window.challengeState = {
-            type: "challenging",
-            playerIndex: challengingPlayerIndex,
-          }
-        } else {
-          // If they decline, they get a letter immediately and we start a new round
-          addLetterToPlayer(currentPlayerIndex)
-          lastSelection = null
-          lastCategory = null
-          document.getElementById("category-selection").style.display = "block"
-          document.getElementById("give-up").style.display = "none"
-          document.getElementById("instruction-text").textContent = ""
-          startTurn()
-        }
-      })
-
-      document.getElementById("give-up").addEventListener("click", () => {
-        // The current player (who was challenged) gets a letter
-        addLetterToPlayer(currentPlayerIndex)
-
-        // Reset challenge state
-        delete window.challengeState
-
-        // Start new round
-        lastSelection = null
-        lastCategory = null
-        document.getElementById("category-selection").style.display = "block"
-        document.getElementById("give-up").style.display = "none"
-        document.getElementById("instruction-text").textContent = ""
-        startTurn()
-      })
-
+      // Game event handlers
       document
         .getElementById("search-button")
         .addEventListener("click", async () => {
           const query = document.getElementById("search-bar").value.trim()
-          if (!query) {
-            alert("Search query cannot be empty.")
-            return
-          }
+          if (!query) return
 
           const category =
-            lastCategory ||
-            document.querySelector('input[name="category"]:checked').value
-          const response = await fetch(
-            `/search?query=${encodeURIComponent(query)}&category=${category}`
-          )
-          const results = await response.json()
+            document.querySelector('input[name="category"]:checked')?.value ||
+            gameState.lastCategory
 
-          const resultsList = document.getElementById("search-results")
-          resultsList.innerHTML = ""
-          results.forEach((result) => {
-            const listItem = document.createElement("li")
-            listItem.textContent = result
-            const selectButton = document.createElement("button")
-            selectButton.textContent = "Select"
-            if (usedItems.has(result)) {
-              selectButton.disabled = true
-            }
-            selectButton.addEventListener("click", () => {
-              if (usedItems.has(result)) {
-                alert("This item has already been used.")
-                return
+          try {
+            const response = await fetch(
+              `/search?query=${encodeURIComponent(query)}&category=${category}`
+            )
+            const results = await response.json()
+
+            const resultsList = document.getElementById("search-results")
+            resultsList.innerHTML = ""
+            results.forEach((result) => {
+              if (!gameState.usedItems?.includes(result)) {
+                const li = document.createElement("li")
+                li.textContent = result
+                const selectBtn = document.createElement("button")
+                selectBtn.textContent = "Select"
+                selectBtn.onclick = () => {
+                  makeSelection(result, category)
+                  // Start timer for next player
+                  ws.send(JSON.stringify({ type: "start_turn" }))
+                }
+                li.appendChild(selectBtn)
+                resultsList.appendChild(li)
               }
-
-              usedItems.add(result)
-              const usedItem = document.createElement("li")
-              usedItem.textContent = result
-              document.getElementById("used-items").appendChild(usedItem)
-
-              lastSelection = result
-              document.getElementById("search-results").innerHTML = ""
-
-              // Handle challenge state if it exists
-              if (window.challengeState) {
-                addLetterToPlayer(window.challengeState.playerIndex)
-                delete window.challengeState
-                // Start new round after challenge is complete
-                lastSelection = null
-                lastCategory = "movie"
-                document.querySelector("#search-bar").placeholder =
-                  "Search movies"
-                document.getElementById("category-selection").style.display =
-                  "block"
-                document.getElementById("instruction-text").textContent = ""
-              }
-
-              nextTurn()
             })
-            listItem.appendChild(selectButton)
-            resultsList.appendChild(listItem)
-          })
+          } catch (error) {
+            alert("Failed to search")
+          }
         })
 
-      function addLetterToPlayer(playerIndex) {
-        players[playerIndex].letters++
-        updatePlayerStatus()
-
-        if (players[playerIndex].letters >= 4) {
-          alert(`${players[playerIndex].name} has been eliminated!`)
-          players.splice(playerIndex, 1)
-          if (players.length === 1) {
-            alert(`${players[0].name} is the winner!`)
-            location.reload()
-          }
-          currentPlayerIndex = playerIndex % players.length
-        } else {
-          alert(
-            `${players[playerIndex].name} has ${bombLetters
-              .slice(0, players[playerIndex].letters)
-              .join("")}!`
-          )
-        }
-        lastSelection = null
-        lastCategory = "movie"
-        challengeOccurredThisRound = false
-        document.getElementById("category-selection").style.display = "block"
-        document.getElementById("give-up").style.display = "none"
-        document.getElementById("challenge").style.display = "none"
-        document.getElementById("instruction-text").textContent = ""
+      function makeSelection(selection, category) {
+        ws.send(
+          JSON.stringify({
+            type: "make_selection",
+            content: { selection, category },
+          })
+        )
       }
 
-      function nextTurn() {
-        currentPlayerIndex = (currentPlayerIndex + 1) % players.length
-        startTurn()
+      function handleGameEnded(message) {
+        alert(message.message)
+        localStorage.removeItem("gameId")
+        localStorage.removeItem("playerName")
+        location.reload()
       }
+
+      // Challenge and Give Up functionality remains similar to before,
+      // but now sends WebSocket messages instead of handling locally
+      document.getElementById("challenge").addEventListener("click", () => {
+        ws.send(JSON.stringify({ type: "challenge" }))
+      })
+
+      document.getElementById("give-up").addEventListener("click", () => {
+        ws.send(JSON.stringify({ type: "give_up" }))
+      })
+
+      document
+        .getElementById("start-game-btn")
+        .addEventListener("click", () => {
+          ws.send(JSON.stringify({ type: "start_game" }))
+        })
     </script>
   </body>
 </html>
