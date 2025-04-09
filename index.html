@@ -173,6 +173,43 @@
         })
       })
 
+      document.getElementById("challenge").addEventListener("click", () => {
+        const previousPlayerIndex =
+          (currentPlayerIndex - 1 + players.length) % players.length
+        const previousPlayer = players[previousPlayerIndex]
+        const challengingPlayerIndex = currentPlayerIndex
+        const currentCategory = lastCategory
+
+        // Set the previous player as the active player for the challenge
+        currentPlayerIndex = previousPlayerIndex
+        document.getElementById("current-player").textContent =
+          previousPlayer.name
+
+        document.getElementById("category-selection").style.display = "none"
+        document.getElementById("challenge").style.display = "none"
+
+        const isValid = confirm(
+          `${previousPlayer.name}, can you provide a valid ${currentCategory}?`
+        )
+
+        if (isValid) {
+          // Let the challenged player make their selection first
+          // The letter will be assigned to the challenging player after a valid selection
+          window.challengeState = {
+            type: "challenging",
+            playerIndex: challengingPlayerIndex,
+          }
+        } else {
+          // If they decline, they get a letter immediately and we start a new round
+          addLetterToPlayer(currentPlayerIndex)
+          lastSelection = null
+          lastCategory = null
+          document.getElementById("category-selection").style.display = "block"
+          document.getElementById("instruction-text").textContent = ""
+          startTurn()
+        }
+      })
+
       document
         .getElementById("search-button")
         .addEventListener("click", async () => {
@@ -213,29 +250,25 @@
 
               lastSelection = result
               document.getElementById("search-results").innerHTML = ""
+
+              // Handle challenge state if it exists
+              if (window.challengeState) {
+                addLetterToPlayer(window.challengeState.playerIndex)
+                delete window.challengeState
+                // Start new round after challenge is complete
+                lastSelection = null
+                lastCategory = null
+                document.getElementById("category-selection").style.display =
+                  "block"
+                document.getElementById("instruction-text").textContent = ""
+              }
+
               nextTurn()
             })
             listItem.appendChild(selectButton)
             resultsList.appendChild(listItem)
           })
         })
-
-      document.getElementById("challenge").addEventListener("click", () => {
-        const previousPlayerIndex =
-          (currentPlayerIndex - 1 + players.length) % players.length
-        const previousPlayer = players[previousPlayerIndex]
-
-        const isValid = confirm(
-          `${previousPlayer.name}, can you provide a valid selection?`
-        )
-        if (isValid) {
-          addLetterToPlayer(currentPlayerIndex)
-        } else {
-          addLetterToPlayer(previousPlayerIndex)
-        }
-
-        nextTurn()
-      })
 
       function addLetterToPlayer(playerIndex) {
         players[playerIndex].letters++
