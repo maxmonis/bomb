@@ -75,6 +75,7 @@
       let usedItems = new Set()
       let lastSelection = null
       let lastCategory = "movie"
+      let challengeOccurredThisRound = false
       const bombLetters = ["B", "O", "M", "B"]
 
       document.getElementById("start-game").addEventListener("click", () => {
@@ -139,8 +140,13 @@
             lastCategory = "movie"
           }
           document.getElementById("category-selection").style.display = "none"
+          document.getElementById("challenge").style.display =
+            challengeOccurredThisRound ? "none" : "block"
         } else {
           document.getElementById("category-selection").style.display = "block"
+          document.getElementById("challenge").style.display = "none"
+          document.getElementById("instruction-text").textContent = ""
+          challengeOccurredThisRound = false
         }
 
         startCountdown()
@@ -180,6 +186,12 @@
       })
 
       document.getElementById("challenge").addEventListener("click", () => {
+        challengeOccurredThisRound = true
+
+        // Reset timer to 30 seconds
+        clearInterval(countdownInterval)
+        startCountdown()
+
         const previousPlayerIndex =
           (currentPlayerIndex - 1 + players.length) % players.length
         const previousPlayer = players[previousPlayerIndex]
@@ -295,6 +307,12 @@
               .join("")}!`
           )
         }
+        lastSelection = null
+        lastCategory = "movie"
+        challengeOccurredThisRound = false
+        document.getElementById("category-selection").style.display = "block"
+        document.getElementById("challenge").style.display = "none"
+        document.getElementById("instruction-text").textContent = ""
       }
 
       function nextTurn() {
