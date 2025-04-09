@@ -230,8 +230,7 @@
       }
 
       function updateGameState(game) {
-        console.log({ game })
-        // Update player status display
+        console.log("Game state update:", game)
         const statusDiv = document.getElementById("player-status")
         const waitingRoom = document.getElementById("waiting-room")
         const gameArea = document.getElementById("game-area")
@@ -299,28 +298,28 @@
           // Update creator controls
           if (gameState.isCreator) {
             creatorControls.classList.remove("hidden")
-
-            // Update join requests
             const requestsDiv = document.getElementById("join-requests")
             requestsDiv.innerHTML = ""
 
-            Object.entries(game.joinRequests || {}).forEach(
-              ([name, request]) => {
+            // Make sure joinRequests exists and is an object
+            if (game.joinRequests && typeof game.joinRequests === "object") {
+              console.log("Join requests:", game.joinRequests)
+              Object.entries(game.joinRequests).forEach(([name, request]) => {
                 const requestDiv = document.createElement("div")
                 requestDiv.className = "join-request"
                 requestDiv.innerHTML = `
-                        <p><strong>${name}</strong></p>
-                        ${
-                          request.message
-                            ? `<p>Message: ${request.message}</p>`
-                            : ""
-                        }
-                        <button onclick="handleJoinRequest('${name}', true)">Admit</button>
-                        <button onclick="handleJoinRequest('${name}', false)">Reject</button>
-                    `
+                            <p><strong>${name}</strong></p>
+                            ${
+                              request.message
+                                ? `<p>Message: ${request.message}</p>`
+                                : ""
+                            }
+                            <button onclick="handleJoinRequest('${name}', true)">Admit</button>
+                            <button onclick="handleJoinRequest('${name}', false)">Reject</button>
+                        `
                 requestsDiv.appendChild(requestDiv)
-              }
-            )
+              })
+            }
 
             // Update start button - enable only if there are 2 or more players
             const startButton = document.getElementById("start-game-btn")

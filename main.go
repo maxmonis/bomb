@@ -396,25 +396,27 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         player = &Player{
             Name: msg.Name,
             Conn: conn,
+            IsActive: true,
         }
         game.Players = append(game.Players, player)
-    } else if _, exists := game.JoinRequests[msg.Name]; exists {
-        player = &Player{
-            Name: msg.Name,
-            Conn: conn,
+    } else {
+        // Check if player is already in the game
+        for _, p := range game.Players {
+            if p.Name == msg.Name {
+                p.Conn = conn
+                player = p
+                break
+            }
         }
-        delete(game.JoinRequests, msg.Name)
-        game.Players = append(game.Players, player)
-    }
-
-    if player == nil {
-        game.mu.Unlock()
-        conn.WriteJSON(map[string]string{
-            "type": "error",
-            "message": "Not authorized to join this game",
-        })
-        conn.Close()
-        return
+        
+        // If not in game, keep their connection but don't add them yet
+        if player == nil {
+            player = &Player{
+                Name: msg.Name,
+                Conn: conn,
+                IsActive: false,
+            }
+        }
     }
 
     game.mu.Unlock()
@@ -566,6 +568,13 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         _, requestExists := game.JoinRequests[content.PlayerName]
         
         if isCreator && !inProgress && requestExists {
+            // Add the player to the game
+            game.Players = append(game.Players, &Player{
+                Name: content.PlayerName,
+                IsActive: true,
+            })
+            // Remove from join requests
+            delete(game.JoinRequests, content.PlayerName)
             game.mu.Unlock()
             broadcastGameState(game)
         } else {
