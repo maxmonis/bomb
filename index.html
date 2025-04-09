@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BOMB</title>
+  </head>
+  <body>
+    <h1>BOMB</h1>
+
+    <div>
+      <input type="radio" id="actor" name="category" value="actor" checked />
+      <label for="actor">Actor</label>
+      <input type="radio" id="movie" name="category" value="movie" />
+      <label for="movie">Movie</label>
+    </div>
+
+    <form id="searchForm">
+      <input
+        type="text"
+        id="searchQuery"
+        placeholder="Enter search term"
+        required
+      />
+      <button type="submit">Search</button>
+    </form>
+    <ul id="results"></ul>
+
+    <script>
+      document
+        .querySelector("#searchForm")
+        .addEventListener("submit", async function (event) {
+          event.preventDefault()
+
+          let category = document.querySelector(
+            'input[name="category"]:checked'
+          ).value
+
+          let query = document.getElementById("searchQuery").value
+          let response = await fetch(
+            `/search?query=${encodeURIComponent(query)}&category=${category}`
+          )
+          let { titles } = await response.json()
+
+          let resultsList = document.getElementById("results")
+          resultsList.innerHTML = ""
+          for (let title of titles) {
+            let listItem = document.createElement("li")
+            listItem.textContent = title
+            resultsList.appendChild(listItem)
+          }
+        })
+    </script>
+  </body>
+</html>
