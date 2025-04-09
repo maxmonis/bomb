@@ -675,14 +675,16 @@ func startTimer(game *Game) {
     game.TimeLeft = 30
     broadcastGameState(game)
 
-    game.Timer = time.NewTimer(time.Second)
+    ticker := time.NewTicker(time.Second)
+    game.Timer = time.NewTimer(30 * time.Second) // Full duration timer
+    
     go func() {
+        defer ticker.Stop()
         for {
-            <-game.Timer.C
-            game.Mu.Lock()
-            game.TimeLeft--
-            
-            if game.TimeLeft <= 0 {
+            select {
+            case <-game.Timer.C:
+                // Timer completed
+                game.Mu.Lock()
                 // Time's up - current player gets a letter
                 for i, p := range game.Players {
                     if i == game.CurrentPlayer {
@@ -700,14 +702,19 @@ func startTimer(game *Game) {
                 game.RoundStarted = false
                 game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
                 game.Timer = nil
+                game.TimeLeft = 0
                 broadcastGameState(game)
                 game.Mu.Unlock()
                 return
-            }
             
-            game.Timer.Reset(time.Second)
-            broadcastGameState(game)
-            game.Mu.Unlock()
+            case <-ticker.C:
+                game.Mu.Lock()
+                if game.TimeLeft > 0 {
+                    game.TimeLeft--
+                    broadcastGameState(game)
+                }
+                game.Mu.Unlock()
+            }
         }
     }()
 }

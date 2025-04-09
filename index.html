@@ -260,6 +260,11 @@
         const playersList = document.getElementById("players-list")
         const creatorControls = document.getElementById("creator-controls")
         const pendingMessage = document.getElementById("pending-message")
+        const searchWidgets = document.getElementById("category-selection")
+        const searchBar = document.getElementById("search-bar")
+        const searchButton = document.getElementById("search-button")
+        const searchResults = document.getElementById("search-results")
+        const countdownElement = document.getElementById("countdown")
 
         // Clear the players list
         playersList.innerHTML = ""
@@ -294,10 +299,33 @@
           gameArea.classList.remove("hidden")
           pendingMessage.classList.add("hidden")
 
-          // Update current player display
+          // Update current player display and search widgets visibility
           const currentPlayerName = game.players[game.currentPlayer]?.name
           document.getElementById("current-player").textContent =
             currentPlayerName || ""
+
+          // Update countdown if it exists
+          if (game.timeLeft !== undefined) {
+            countdownElement.textContent = game.timeLeft
+          }
+
+          // Show/hide search widgets based on whether it's the current player's turn
+          const isCurrentPlayer = currentPlayerName === gameState.playerName
+          if (isCurrentPlayer) {
+            searchWidgets.classList.remove("hidden")
+            searchBar.classList.remove("hidden")
+            searchButton.classList.remove("hidden")
+            document.getElementById("instruction-text").textContent =
+              "Your turn! Search for a movie or actor"
+          } else {
+            searchWidgets.classList.add("hidden")
+            searchBar.classList.add("hidden")
+            searchButton.classList.add("hidden")
+            searchResults.innerHTML = ""
+            document.getElementById(
+              "instruction-text"
+            ).textContent = `${currentPlayerName} is thinking...`
+          }
 
           // Show/hide challenge button
           const challengeBtn = document.getElementById("challenge")
@@ -322,6 +350,7 @@
             }
           }
         } else {
+          // ... rest of the existing waiting room code ...
           statusDiv.classList.add("hidden")
           waitingRoom.classList.remove("hidden")
           gameArea.classList.add("hidden")
@@ -477,35 +506,61 @@
           const query = document.getElementById("search-bar").value.trim()
           if (!query) return
 
-          const category =
-            document.querySelector('input[name="category"]:checked')?.value ||
-            gameState.lastCategory
+          const category = document.querySelector(
+            'input[name="category"]:checked'
+          )?.value
 
           try {
-            const response = await fetch(
-              `/search?query=${encodeURIComponent(query)}&category=${category}`
-            )
+            const params = new URLSearchParams({
+              query,
+              category,
+            })
+
+            // Add lastSelection if it exists
+            if (gameState.lastSelection) {
+              params.append("lastSelection", gameState.lastSelection)
+            }
+
+            const response = await fetch(`/search?${params}`)
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`)
+            }
+
             const results = await response.json()
 
             const resultsList = document.getElementById("search-results")
             resultsList.innerHTML = ""
+
+            if (!results || results.length === 0) {
+              resultsList.innerHTML = "<li>No results found</li>"
+              return
+            }
+
             results.forEach((result) => {
-              if (!gameState.usedItems?.includes(result)) {
-                const li = document.createElement("li")
-                li.textContent = result
-                const selectBtn = document.createElement("button")
-                selectBtn.textContent = "Select"
-                selectBtn.onclick = () => {
-                  makeSelection(result, category)
-                  // Start timer for next player
-                  ws.send(JSON.stringify({ type: "start_turn" }))
-                }
-                li.appendChild(selectBtn)
-                resultsList.appendChild(li)
+              const li = document.createElement("li")
+              li.textContent = result
+              const selectBtn = document.createElement("button")
+              selectBtn.textContent = "Select"
+              selectBtn.onclick = () => {
+                makeSelection(result, category)
+                // Clear search results after selection
+                resultsList.innerHTML = ""
+                document.getElementById("search-bar").value = ""
+                // Update game state with the selection
+                gameState.lastSelection = result
+                gameState.lastCategory = category
+                // Start timer for next player
+                ws.send(JSON.stringify({ type: "start_turn" }))
               }
+              li.appendChild(selectBtn)
+              resultsList.appendChild(li)
             })
           } catch (error) {
-            alert("Failed to search")
+            console.error("Search error:", error)
+            const resultsList = document.getElementById("search-results")
+            resultsList.innerHTML =
+              "<li>Failed to fetch results. Please try again.</li>"
           }
         })
 
