@@ -36,7 +36,7 @@ type Game struct {
 	LastSelection string           `json:"lastSelection"`
 	LastCategory  string           `json:"lastCategory"`
 	UsedItems     map[string]bool  `json:"usedItems"`
-	mu            sync.Mutex       `json:"-"`
+	Mu            sync.Mutex       `json:"-"`
 	ChallengeState  *ChallengeState    `json:"challengeState,omitempty"`
 	RoundStarted    bool               `json:"roundStarted"`
 	JoinRequests    map[string]JoinRequest `json:"joinRequests"`
@@ -45,8 +45,8 @@ type Game struct {
 }
 
 type ChallengeState struct {
-	ChallengerName  string `json:"challengerName"`
-	ChallengedName  string `json:"challengedName"`
+	ChallengerName   string `json:"challengerName"`
+	ChallengedName   string `json:"challengedName"`
 	ExpectedCategory string `json:"expectedCategory"`
 }
 
@@ -288,10 +288,10 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
     }
     gamesMutex.Unlock()
 
-    game.mu.Lock()
+    game.Mu.Lock()
     // Check if game is already in progress
     if game.InProgress {
-        game.mu.Unlock()
+        game.Mu.Unlock()
         http.Error(w, "Game already in progress", http.StatusBadRequest)
         return
     }
@@ -299,7 +299,7 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
     // Check if player name is already taken
     for _, player := range game.Players {
         if player.Name == req.Name {
-            game.mu.Unlock()
+            game.Mu.Unlock()
             http.Error(w, "Player name already taken", http.StatusConflict)
             return
         }
@@ -315,7 +315,7 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
             IsActive: true,
         })
     }
-    game.mu.Unlock()
+    game.Mu.Unlock()
 
     // Send success response
     w.Header().Set("Content-Type", "application/json")
@@ -380,7 +380,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     }
 
     log.Printf("Attempting to acquire game mutex in handleWebSocket for game %s", msg.GameID)
-    game.mu.Lock()
+    game.Mu.Lock()
     
     var player *Player
     if msg.IsReconnect {
@@ -411,7 +411,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     }
 
     if player == nil {
-        game.mu.Unlock()
+        game.Mu.Unlock()
         conn.WriteJSON(map[string]string{
             "type": "error",
             "message": "Not authorized to join this game",
@@ -420,7 +420,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    game.mu.Unlock()
+    game.Mu.Unlock()
     log.Printf("Released game mutex in handleWebSocket")
 
     // Broadcast state after releasing the mutex
@@ -471,7 +471,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         }
         
         // Acquire mutex
-        game.mu.Lock()
+        game.Mu.Lock()
         
         // Check conditions under lock
         canMakeSelection := game.Players[game.CurrentPlayer].Name == player.Name && game.ChallengeState == nil
@@ -488,7 +488,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             }
             
             // Release mutex before broadcasting
-            game.mu.Unlock()
+            game.Mu.Unlock()
             
             if validSelection {
                 broadcastGameState(game)
@@ -499,22 +499,22 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 })
             }
         } else {
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
 
     case "start_game":
-        game.mu.Lock()
+        game.Mu.Lock()
         if player.Name == game.CreatorID && !game.InProgress && len(game.Players) >= 2 {
             game.InProgress = true
             game.CurrentPlayer = 0  // Start with the first player
-            game.mu.Unlock()
+            game.Mu.Unlock()
             broadcastGameState(game)
         } else {
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
 
     case "challenge":
-        game.mu.Lock()
+        game.Mu.Lock()
         if game.RoundStarted && game.ChallengeState == nil {
             previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
             game.ChallengeState = &ChallengeState{
@@ -523,14 +523,14 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 ExpectedCategory: game.LastCategory,
             }
             game.CurrentPlayer = previousPlayerIndex
-            game.mu.Unlock()
+            game.Mu.Unlock()
             broadcastGameState(game)
         } else {
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
 
     case "give_up":
-        game.mu.Lock()
+        game.Mu.Lock()
         if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
             // Add letter to challenged player
             for i, p := range game.Players {
@@ -548,10 +548,10 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             game.LastSelection = ""
             game.LastCategory = ""
             game.RoundStarted = false
-            game.mu.Unlock()
+            game.Mu.Unlock()
             broadcastGameState(game)
         } else {
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
 
     case "admit_player":
@@ -563,7 +563,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             return
         }
         
-        game.mu.Lock()
+        game.Mu.Lock()
         isCreator := player.Name == game.CreatorID
         inProgress := game.InProgress
         _, requestExists := game.JoinRequests[content.PlayerName]
@@ -576,10 +576,10 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             })
             // Remove from join requests
             delete(game.JoinRequests, content.PlayerName)
-            game.mu.Unlock()
+            game.Mu.Unlock()
             broadcastGameState(game)
         } else {
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
 
     case "reject_player":
@@ -591,33 +591,33 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             return
         }
         
-        game.mu.Lock()
+        game.Mu.Lock()
         if player.Name == game.CreatorID {
             if _, exists := game.JoinRequests[content.PlayerName]; exists {
                 delete(game.JoinRequests, content.PlayerName)
-                game.mu.Unlock()
+                game.Mu.Unlock()
                 broadcastGameState(game)
                 return
             }
         }
-        game.mu.Unlock()
+        game.Mu.Unlock()
 
     case "start_turn":
-        game.mu.Lock()
+        game.Mu.Lock()
         if game.Players[game.CurrentPlayer].Name == player.Name {
-            game.mu.Unlock()
+            game.Mu.Unlock()
             startTimer(game)
         } else {
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
     }
 
     // Check for game end
-    game.mu.Lock()
+    game.Mu.Lock()
     if len(game.Players) == 1 {
         // Get winner under lock
         winner := game.Players[0].Name
-        game.mu.Unlock()
+        game.Mu.Unlock()
         
         // Notify winner without holding the lock
         for _, p := range game.Players {
@@ -632,7 +632,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         delete(games, game.ID)
         gamesMutex.Unlock()
     } else {
-        game.mu.Unlock()
+        game.Mu.Unlock()
     }
 }
 
@@ -648,7 +648,7 @@ func startTimer(game *Game) {
     go func() {
         for {
             <-game.Timer.C
-            game.mu.Lock()
+            game.Mu.Lock()
             game.TimeLeft--
             
             if game.TimeLeft <= 0 {
@@ -670,20 +670,20 @@ func startTimer(game *Game) {
                 game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
                 game.Timer = nil
                 broadcastGameState(game)
-                game.mu.Unlock()
+                game.Mu.Unlock()
                 return
             }
             
             game.Timer.Reset(time.Second)
             broadcastGameState(game)
-            game.mu.Unlock()
+            game.Mu.Unlock()
         }
     }()
 }
 
 func handlePlayerDisconnect(game *Game, player *Player) {
-	game.mu.Lock()
-	defer game.mu.Unlock()
+	game.Mu.Lock()
+	defer game.Mu.Unlock()
 
 	// Remove player from the game
 	for i, p := range game.Players {
@@ -717,7 +717,7 @@ func handlePlayerDisconnect(game *Game, player *Player) {
 
 func broadcastGameState(game *Game) {
     // Make a copy of the state under lock
-    game.mu.Lock()
+    game.Mu.Lock()
     state := struct {
         Type    string `json:"type"`
         Game    *Game  `json:"game"`
@@ -754,7 +754,7 @@ func broadcastGameState(game *Game) {
     players := make([]*Player, len(game.Players))
     copy(players, game.Players)
     
-    game.mu.Unlock()
+    game.Mu.Unlock()
 
     // Broadcast without holding the lock
     var failedPlayers []*Player
@@ -774,7 +774,7 @@ func broadcastGameState(game *Game) {
 
     // Re-acquire lock to remove failed players
     if len(failedPlayers) > 0 {
-        game.mu.Lock()
+        game.Mu.Lock()
         for _, failedPlayer := range failedPlayers {
             for i, p := range game.Players {
                 if p == failedPlayer {
@@ -784,14 +784,14 @@ func broadcastGameState(game *Game) {
                         gamesMutex.Lock()
                         delete(games, game.ID)
                         gamesMutex.Unlock()
-                        game.mu.Unlock()
+                        game.Mu.Unlock()
                         return
                     }
                     break
                 }
             }
         }
-        game.mu.Unlock()
+        game.Mu.Unlock()
     }
 }
 
