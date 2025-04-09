@@ -34,7 +34,6 @@ func main() {
 
 		encodedQuery := url.QueryEscape(query)
 		searchUrl := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=%s", encodedQuery)
-		log.Printf("Fetching data from Wikimedia API: %s\n", searchUrl)
 		resp, err := http.Get(searchUrl)
 		if err != nil {
 			log.Printf("Failed to fetch data from Wikimedia API: %v\n", err)
@@ -104,8 +103,6 @@ func main() {
 			http.Error(w, "Failed to parse revisions JSON response", http.StatusInternalServerError)
 			return
 		}
-
-		log.Printf("Revisions data: %v\n", revisionsData)
 
 		// Combine titles and revisions into a response, filtering by "birth_date"
 		filteredTitles := []string{}
