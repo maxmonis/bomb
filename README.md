@@ -20,4 +20,6 @@ A list of actors and a list of movies is displayed on the screen. Actors and mov
 
 ### Technical Overview
 
-This first iteration only allows local play on a single device and has no external dependencies.
+The first iteration only allowed local play on a single device.
+
+The new iteration is a web app which allows users to play online. There is no database, so the game state is kept in the server. Users can join a game, and the game state is synchronized across all users in the game using web sockets. No account creation is required, any user can create a game and select their name as they'd like it to appear. Games can be started once at least two players have joined, and the creator decides when to start the game. When players request to join a game, they choose their name and can optionally send a message to the creator. The creator decides whether to admit them or not. Games cannot be joined once in progress. If the creator leaves, the game ends. Games cannot be stopped and started, but we do keep track of the current game's ID using local storage in case a user refreshes the page.
