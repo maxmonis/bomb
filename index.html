@@ -68,6 +68,7 @@
       <button id="search-button">Search</button>
       <ul id="search-results"></ul>
       <button id="challenge">Challenge</button>
+      <button id="give-up" style="display: none">Give Up</button>
       <ul id="used-items"></ul>
     </div>
 
@@ -205,18 +206,19 @@
           (currentPlayerIndex - 1 + players.length) % players.length
         const previousPlayer = players[previousPlayerIndex]
         const challengingPlayerIndex = currentPlayerIndex
-        const currentCategory = lastCategory
 
         // Set the previous player as the active player for the challenge
         currentPlayerIndex = previousPlayerIndex
         document.getElementById("current-player").textContent =
           previousPlayer.name
 
+        // Show give up button during challenge
+        document.getElementById("give-up").style.display = "block"
         document.getElementById("category-selection").style.display = "none"
         document.getElementById("challenge").style.display = "none"
 
         const isValid = confirm(
-          `${previousPlayer.name}, can you provide a valid ${currentCategory}?`
+          `${previousPlayer.name}, can you provide a valid ${lastCategory === 'movie' ? 'actor' : 'movie'}?`
         )
 
         if (isValid) {
@@ -232,9 +234,26 @@
           lastSelection = null
           lastCategory = null
           document.getElementById("category-selection").style.display = "block"
+          document.getElementById("give-up").style.display = "none"
           document.getElementById("instruction-text").textContent = ""
           startTurn()
         }
+      })
+
+      document.getElementById("give-up").addEventListener("click", () => {
+        // The current player (who was challenged) gets a letter
+        addLetterToPlayer(currentPlayerIndex)
+        
+        // Reset challenge state
+        delete window.challengeState
+        
+        // Start new round
+        lastSelection = null
+        lastCategory = null
+        document.getElementById("category-selection").style.display = "block"
+        document.getElementById("give-up").style.display = "none"
+        document.getElementById("instruction-text").textContent = ""
+        startTurn()
       })
 
       document
@@ -322,6 +341,7 @@
         lastCategory = "movie"
         challengeOccurredThisRound = false
         document.getElementById("category-selection").style.display = "block"
+        document.getElementById("give-up").style.display = "none"
         document.getElementById("challenge").style.display = "none"
         document.getElementById("instruction-text").textContent = ""
       }
