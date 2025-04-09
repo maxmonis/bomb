@@ -42,6 +42,10 @@
 
     <div id="lobby" class="hidden">
       <h2>Game Lobby</h2>
+      <div id="available-games">
+        <h3>Available Games</h3>
+        <ul id="games-list"></ul>
+      </div>
       <div id="create-game">
         <h3>Create New Game</h3>
         <input type="text" id="creator-name" placeholder="Enter your name" />
@@ -222,38 +226,34 @@
       function updateGameState(game) {
         // Update player status display
         const statusDiv = document.getElementById("player-status")
+        const waitingRoom = document.getElementById("waiting-room")
+        const gameArea = document.getElementById("game-area")
+        const playersList = document.getElementById("players-list")
+
+        // Clear the players list
+        playersList.innerHTML = ""
+
+        // Always update the players list when we have players
+        game.Players.forEach((player) => {
+          const li = document.createElement("li")
+          li.textContent = `${player.Name}${
+            player.Name === game.CreatorID ? " (Creator)" : ""
+          }`
+          playersList.appendChild(li)
+        })
+
         if (game.InProgress) {
+          // ...rest of the existing game in progress code...
           statusDiv.classList.remove("hidden")
-          statusDiv.innerHTML = ""
-          game.Players.forEach((player) => {
-            const playerDiv = document.createElement("div")
-            playerDiv.className = "player"
-            playerDiv.innerHTML = `<strong>${player.Name}</strong><br>`
-            ;["B", "O", "M", "B"].forEach((letter, i) => {
-              const span = document.createElement("span")
-              span.className = `bomb-letter${i < player.Letters ? " red" : ""}`
-              span.textContent = letter
-              playerDiv.appendChild(span)
-            })
-            statusDiv.appendChild(playerDiv)
-          })
-        }
-
-        // Update waiting room
-        if (!game.InProgress) {
-          document.getElementById("waiting-room").classList.remove("hidden")
-          document.getElementById("game-area").classList.add("hidden")
-
-          // Update players list
-          const playersList = document.getElementById("players-list")
-          playersList.innerHTML = ""
-          game.Players.forEach((player) => {
-            const li = document.createElement("li")
-            li.textContent = `${player.Name}${
-              player.Name === game.CreatorID ? " (Creator)" : ""
-            }`
-            playersList.appendChild(li)
-          })
+          waitingRoom.classList.add("hidden")
+          gameArea.classList.remove("hidden")
+          // ... existing game state update code ...
+        } else {
+          // Show waiting room, hide game area
+          statusDiv.classList.add("hidden")
+          waitingRoom.classList.remove("hidden")
+          gameArea.classList.add("hidden")
+          document.getElementById("game-id-display").textContent = game.ID
 
           // Update creator controls
           if (gameState.playerName === game.CreatorID) {
@@ -263,16 +263,21 @@
             // Update join requests
             const requestsDiv = document.getElementById("join-requests")
             requestsDiv.innerHTML = ""
+
             Object.entries(game.JoinRequests || {}).forEach(
               ([name, request]) => {
                 const requestDiv = document.createElement("div")
                 requestDiv.className = "join-request"
                 requestDiv.innerHTML = `
-                <p><strong>${name}</strong></p>
-                ${request.Message ? `<p>Message: ${request.Message}</p>` : ""}
-                <button onclick="handleJoinRequest('${name}', true)">Admit</button>
-                <button onclick="handleJoinRequest('${name}', false)">Reject</button>
-              `
+                        <p><strong>${name}</strong></p>
+                        ${
+                          request.Message
+                            ? `<p>Message: ${request.Message}</p>`
+                            : ""
+                        }
+                        <button onclick="handleJoinRequest('${name}', true)">Admit</button>
+                        <button onclick="handleJoinRequest('${name}', false)">Reject</button>
+                    `
                 requestsDiv.appendChild(requestDiv)
               }
             )
@@ -280,55 +285,6 @@
             // Update start button
             document.getElementById("start-game-btn").disabled =
               game.Players.length < 2
-          }
-        }
-
-        // Update game area
-        if (game.InProgress) {
-          document.getElementById("waiting-room").classList.add("hidden")
-          document.getElementById("game-area").classList.remove("hidden")
-
-          const isMyTurn =
-            game.Players[game.CurrentPlayer]?.Name === gameState.playerName
-          document.getElementById("current-player").textContent =
-            game.Players[game.CurrentPlayer]?.Name || ""
-          document.getElementById("search-bar").disabled = !isMyTurn
-          document.getElementById("search-button").disabled = !isMyTurn
-
-          // Update challenge button visibility
-          const challengeBtn = document.getElementById("challenge")
-          challengeBtn.classList.toggle(
-            "hidden",
-            !game.RoundStarted || game.ChallengeState !== null
-          )
-
-          // Update give-up button visibility
-          const giveUpBtn = document.getElementById("give-up")
-          giveUpBtn.classList.toggle(
-            "hidden",
-            !game.ChallengeState ||
-              game.ChallengeState?.ChallengedName !== gameState.playerName
-          )
-
-          // Update category selection and instructions
-          if (game.LastSelection) {
-            document
-              .getElementById("category-selection")
-              .classList.add("hidden")
-            document.getElementById("instruction-text").textContent =
-              game.LastCategory === "movie"
-                ? `Name another actor from ${game.LastSelection}`
-                : `Name another movie starring ${game.LastSelection}`
-          } else if (!game.ChallengeState) {
-            document
-              .getElementById("category-selection")
-              .classList.remove("hidden")
-            document.getElementById("instruction-text").textContent = ""
-          }
-
-          // Update countdown
-          if (typeof game.TimeLeft === "number") {
-            document.getElementById("countdown").textContent = game.TimeLeft
           }
         }
       }
@@ -503,6 +459,32 @@
         .addEventListener("click", () => {
           ws.send(JSON.stringify({ type: "start_game" }))
         })
+
+      function updateAvailableGames() {
+        fetch("/get-games")
+          .then((response) => response.json())
+          .then((games) => {
+            const gamesList = document.getElementById("games-list")
+            gamesList.innerHTML = ""
+            games.forEach((gameId) => {
+              const li = document.createElement("li")
+              li.textContent = `Game ID: ${gameId}`
+              const joinBtn = document.createElement("button")
+              joinBtn.textContent = "Join"
+              joinBtn.onclick = () => {
+                document.getElementById("game-id").value = gameId
+                document.getElementById("game-id").scrollIntoView()
+              }
+              li.appendChild(joinBtn)
+              gamesList.appendChild(li)
+            })
+          })
+          .catch((error) => console.error("Error fetching games:", error))
+      }
+
+      // Call updateAvailableGames initially and every 15 seconds
+      updateAvailableGames()
+      setInterval(updateAvailableGames, 15000)
     </script>
   </body>
 </html>

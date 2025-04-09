@@ -74,6 +74,7 @@ func main() {
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/create-game", handleCreateGame)
 	http.HandleFunc("/join-game", handleJoinGame)
+	http.HandleFunc("/get-games", handleGetGames)
 	
 	// Keep the search endpoint for Wikipedia API
 	http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
@@ -752,4 +753,17 @@ func searchForConnection(content, searchTerm string, sections []string) bool {
         }
     }
     return false
+}
+
+func handleGetGames(w http.ResponseWriter, r *http.Request) {
+	gamesMutex.Lock()
+	defer gamesMutex.Unlock()
+
+	var gameList []string
+	for gameID := range games {
+		gameList = append(gameList, gameID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(gameList)
 }
