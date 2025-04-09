@@ -43,6 +43,27 @@
         border-radius: 4px;
         color: #856404;
       }
+      #selection-history {
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+      }
+      .selection-chain {
+        font-size: 1.1em;
+        color: #495057;
+        line-height: 1.5;
+        padding: 10px;
+      }
+      .movie-selection {
+        color: #0066cc;
+        font-weight: bold;
+      }
+      .actor-selection {
+        color: #cc6600;
+        font-weight: bold;
+      }
     </style>
   </head>
   <body>
@@ -113,7 +134,10 @@
       <ul id="search-results"></ul>
       <button id="challenge" class="hidden">Challenge</button>
       <button id="give-up" class="hidden">Give Up</button>
-      <ul id="used-items"></ul>
+      <div id="selection-history">
+        <h3>Selection Chain</h3>
+        <div class="selection-chain"></div>
+      </div>
     </div>
 
     <script>
@@ -265,6 +289,8 @@
         const searchButton = document.getElementById("search-button")
         const searchResults = document.getElementById("search-results")
         const countdownElement = document.getElementById("countdown")
+        const selectionHistory = document.getElementById("selection-history")
+        const selectionChain = document.querySelector(".selection-chain")
 
         // Clear the players list
         playersList.innerHTML = ""
@@ -299,12 +325,13 @@
           gameArea.classList.remove("hidden")
           pendingMessage.classList.add("hidden")
 
-          // Update current player display and search widgets visibility
+          // Update current player display
           const currentPlayerName = game.players[game.currentPlayer]?.name
           document.getElementById("current-player").textContent =
             currentPlayerName || ""
 
           // Update countdown if it exists
+          const countdownElement = document.getElementById("countdown")
           if (game.timeLeft !== undefined) {
             countdownElement.textContent = game.timeLeft
           }
@@ -317,6 +344,15 @@
             searchButton.classList.remove("hidden")
             document.getElementById("instruction-text").textContent =
               "Your turn! Search for a movie or actor"
+
+            // Update radio button based on previous selection
+            if (game.lastCategory) {
+              const nextCategory =
+                game.lastCategory === "movie" ? "actor" : "movie"
+              document.querySelector(
+                `input[name="category"][value="${nextCategory}"]`
+              ).checked = true
+            }
           } else {
             searchWidgets.classList.add("hidden")
             searchBar.classList.add("hidden")
@@ -348,6 +384,22 @@
             } else {
               challengeBtn.classList.add("hidden")
             }
+          }
+
+          // Update selection history
+          if (game.selectionHistory && game.selectionHistory.length > 0) {
+            const chain = document.querySelector(".selection-chain")
+            chain.innerHTML = game.selectionHistory
+              .map((selection, idx) => {
+                const type = idx % 2 === 0 ? "movie" : "actor"
+                return `<span class="${type}-selection">${selection}</span>`
+              })
+              .join(" → ")
+            document
+              .getElementById("selection-history")
+              .classList.remove("hidden")
+          } else {
+            document.getElementById("selection-history").classList.add("hidden")
           }
         } else {
           // ... rest of the existing waiting room code ...
@@ -571,6 +623,16 @@
             content: { selection, category },
           })
         )
+
+        // Update local state
+        gameState.lastSelection = selection
+        gameState.lastCategory = category
+
+        // Set the opposite category for the next player
+        const nextCategory = category === "movie" ? "actor" : "movie"
+        document.querySelector(
+          `input[name="category"][value="${nextCategory}"]`
+        ).checked = true
       }
 
       function handleGameEnded(message) {

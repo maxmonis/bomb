@@ -42,7 +42,8 @@ type Game struct {
 	JoinRequests    map[string]JoinRequest `json:"joinRequests"`
 	Timer           *time.Timer            `json:"-"`
 	TimeLeft        int                    `json:"timeLeft"`
-	PendingConns   map[string]*websocket.Conn `json:"-"`
+	PendingConns    map[string]*websocket.Conn `json:"-"`
+	SelectionHistory []string          `json:"selectionHistory"`
 }
 
 type ChallengeState struct {
@@ -241,6 +242,7 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
         UsedItems:    make(map[string]bool),
         JoinRequests: make(map[string]JoinRequest),
         PendingConns: make(map[string]*websocket.Conn),
+        SelectionHistory: make([]string, 0),
     }
 
     gamesMutex.Lock()
@@ -487,6 +489,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 game.LastSelection = content.Selection
                 game.LastCategory = content.Category
                 game.UsedItems[content.Selection] = true
+                game.SelectionHistory = append(game.SelectionHistory, content.Selection)
                 game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
                 game.RoundStarted = true
             }
@@ -496,6 +499,8 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             
             if validSelection {
                 broadcastGameState(game)
+                // Start timer for next player immediately after valid selection
+                startTimer(game)
             } else {
                 player.Conn.WriteJSON(map[string]string{
                     "type": "error",
@@ -513,6 +518,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             game.CurrentPlayer = 0  // Start with the first player
             game.Mu.Unlock()
             broadcastGameState(game)
+            startTimer(game) // Start timer for first player
         } else {
             game.Mu.Unlock()
         }
@@ -668,55 +674,65 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
 }
 
 func startTimer(game *Game) {
+    game.Mu.Lock()
     if game.Timer != nil {
         game.Timer.Stop()
     }
-    
     game.TimeLeft = 30
+    game.Mu.Unlock()
     broadcastGameState(game)
 
+    done := make(chan bool)
     ticker := time.NewTicker(time.Second)
-    game.Timer = time.NewTimer(30 * time.Second) // Full duration timer
     
     go func() {
         defer ticker.Stop()
         for {
             select {
-            case <-game.Timer.C:
-                // Timer completed
-                game.Mu.Lock()
-                // Time's up - current player gets a letter
-                for i, p := range game.Players {
-                    if i == game.CurrentPlayer {
-                        p.Letters++
-                        if p.Letters >= 4 {
-                            game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                        }
-                        break
-                    }
-                }
-                
-                // Start new round
-                game.LastSelection = ""
-                game.LastCategory = ""
-                game.RoundStarted = false
-                game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
-                game.Timer = nil
-                game.TimeLeft = 0
-                broadcastGameState(game)
-                game.Mu.Unlock()
+            case <-done:
                 return
-            
             case <-ticker.C:
                 game.Mu.Lock()
                 if game.TimeLeft > 0 {
                     game.TimeLeft--
+                    game.Mu.Unlock()
                     broadcastGameState(game)
+                    if game.TimeLeft == 0 {
+                        // Time's up - current player gets a letter
+                        game.Mu.Lock()
+                        for i, p := range game.Players {
+                            if i == game.CurrentPlayer {
+                                p.Letters++
+                                if p.Letters >= 4 {
+                                    game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                                }
+                                break
+                            }
+                        }
+                        
+                        // Start new round
+                        game.LastSelection = ""
+                        game.LastCategory = ""
+                        game.RoundStarted = false
+                        game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+                        game.Timer = nil
+                        game.Mu.Unlock()
+                        broadcastGameState(game)
+                        close(done)
+                        return
+                    }
+                } else {
+                    game.Mu.Unlock()
+                    close(done)
+                    return
                 }
-                game.Mu.Unlock()
             }
         }
     }()
+
+    // Store the done channel to allow cleanup
+    game.Timer = time.NewTimer(time.Hour) // dummy timer, we'll use the done channel
+    game.Timer.Stop()                     // stop it immediately since we don't use it
 }
 
 func handlePlayerDisconnect(game *Game, player *Player) {
@@ -774,6 +790,7 @@ func broadcastGameState(game *Game) {
             RoundStarted:   game.RoundStarted,
             JoinRequests:   make(map[string]JoinRequest),
             TimeLeft:       game.TimeLeft,
+            SelectionHistory: game.SelectionHistory,
         },
     }
 
