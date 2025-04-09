@@ -225,6 +225,11 @@
           case "available_games":
             updateAvailableGames(message.games)
             break
+          case "join_accepted":
+            // Remove pending message when accepted
+            document.getElementById("pending-message").classList.add("hidden")
+            document.getElementById("players-list").classList.remove("hidden")
+            break
           case "error":
             if (message.message === "Game not found") {
               // Stop reconnection attempts if game doesn't exist
@@ -234,8 +239,15 @@
               document.getElementById("lobby").classList.remove("hidden")
               document.getElementById("waiting-room").classList.add("hidden")
               document.getElementById("game-area").classList.add("hidden")
+            } else if (message.message === "Your join request was rejected") {
+              // Return to lobby if rejected
+              localStorage.removeItem("gameId")
+              localStorage.removeItem("playerName")
+              document.getElementById("lobby").classList.remove("hidden")
+              document.getElementById("waiting-room").classList.add("hidden")
+              document.getElementById("game-area").classList.add("hidden")
+              alert("Your join request was rejected")
             }
-            alert(message.message)
             break
         }
       }

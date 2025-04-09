@@ -42,6 +42,7 @@ type Game struct {
 	JoinRequests    map[string]JoinRequest `json:"joinRequests"`
 	Timer           *time.Timer            `json:"-"`
 	TimeLeft        int                    `json:"timeLeft"`
+	PendingConns   map[string]*websocket.Conn `json:"-"`
 }
 
 type ChallengeState struct {
@@ -235,10 +236,11 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
     gameID := uuid.New().String()
     game := &Game{
         ID:           gameID,
-        CreatorID:    req.CreatorName,  // Set creator ID when creating game
+        CreatorID:    req.CreatorName,
         Players:      make([]*Player, 0),
         UsedItems:    make(map[string]bool),
         JoinRequests: make(map[string]JoinRequest),
+        PendingConns: make(map[string]*websocket.Conn),
     }
 
     gamesMutex.Lock()
@@ -338,7 +340,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     }
 
     conn, err := upgrader.Upgrade(w, r, nil)
-    if err != nil {
+    if (err != nil) {
         log.Printf("WebSocket upgrade failed: %v", err)
         return
     }
@@ -401,12 +403,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         }
         game.Players = append(game.Players, player)
     } else {
-        // For non-creator players, just store their connection
-        // They will be added to Players array when admitted by creator
-        player = &Player{
-            Name: msg.Name,
-            Conn: conn,
-            IsActive: false,
+        // For non-creator players, store their connection in PendingConns if they have a join request
+        if _, hasJoinRequest := game.JoinRequests[msg.Name]; hasJoinRequest {
+            game.PendingConns[msg.Name] = conn
+            player = &Player{
+                Name: msg.Name,
+                Conn: conn,
+                IsActive: false,
+            }
         }
     }
 
@@ -569,15 +573,30 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         _, requestExists := game.JoinRequests[content.PlayerName]
         
         if isCreator && !inProgress && requestExists {
+            // Get the pending connection
+            pendingConn := game.PendingConns[content.PlayerName]
+            
             // Add the player to the game
             game.Players = append(game.Players, &Player{
                 Name: content.PlayerName,
                 IsActive: true,
+                Conn: pendingConn,
             })
-            // Remove from join requests
+            
+            // Clean up
+            delete(game.PendingConns, content.PlayerName)
             delete(game.JoinRequests, content.PlayerName)
+            
             game.Mu.Unlock()
             broadcastGameState(game)
+            
+            // Notify the admitted player
+            if pendingConn != nil {
+                pendingConn.WriteJSON(map[string]string{
+                    "type": "join_accepted",
+                    "message": "You have been admitted to the game",
+                })
+            }
         } else {
             game.Mu.Unlock()
         }
@@ -594,7 +613,19 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         game.Mu.Lock()
         if player.Name == game.CreatorID {
             if _, exists := game.JoinRequests[content.PlayerName]; exists {
+                // Get the pending connection before cleanup
+                if pendingConn := game.PendingConns[content.PlayerName]; pendingConn != nil {
+                    // Notify the rejected player
+                    pendingConn.WriteJSON(map[string]string{
+                        "type": "error",
+                        "message": "Your join request was rejected",
+                    })
+                }
+                
+                // Clean up after notification
+                delete(game.PendingConns, content.PlayerName)
                 delete(game.JoinRequests, content.PlayerName)
+                
                 game.Mu.Unlock()
                 broadcastGameState(game)
                 return
@@ -750,43 +781,60 @@ func broadcastGameState(game *Game) {
         state.Game.JoinRequests[k] = v
     }
 
-    // Get players list while under lock
-    players := make([]*Player, len(game.Players))
-    copy(players, game.Players)
+    // Get all connections that need updating while under lock
+    connections := make(map[*websocket.Conn]bool)
+    for _, p := range game.Players {
+        if p.Conn != nil {
+            connections[p.Conn] = true
+        }
+    }
+    for _, conn := range game.PendingConns {
+        if conn != nil {
+            connections[conn] = true
+        }
+    }
     
     game.Mu.Unlock()
 
     // Broadcast without holding the lock
-    var failedPlayers []*Player
-    for _, player := range players {
+    var failedConns []*websocket.Conn
+    for conn := range connections {
         var err error
         for attempts := 0; attempts < 3; attempts++ {
-            if err = player.Conn.WriteJSON(state); err == nil {
+            if err = conn.WriteJSON(state); err == nil {
                 break
             }
             time.Sleep(100 * time.Millisecond)
         }
         if err != nil {
-            log.Printf("Error broadcasting to player %s after retries: %v", player.Name, err)
-            failedPlayers = append(failedPlayers, player)
+            failedConns = append(failedConns, conn)
         }
     }
 
-    // Re-acquire lock to remove failed players
-    if len(failedPlayers) > 0 {
+    // Clean up failed connections
+    if len(failedConns) > 0 {
         game.Mu.Lock()
-        for _, failedPlayer := range failedPlayers {
+        for _, failedConn := range failedConns {
+            // Remove from players if present
             for i, p := range game.Players {
-                if p == failedPlayer {
+                if p.Conn == failedConn {
                     game.Players = append(game.Players[:i], game.Players[i+1:]...)
                     // If this was the creator, end the game
-                    if failedPlayer.Name == game.CreatorID {
+                    if p.Name == game.CreatorID {
                         gamesMutex.Lock()
                         delete(games, game.ID)
                         gamesMutex.Unlock()
                         game.Mu.Unlock()
                         return
                     }
+                    break
+                }
+            }
+            // Remove from pending connections if present
+            for name, conn := range game.PendingConns {
+                if conn == failedConn {
+                    delete(game.PendingConns, name)
+                    delete(game.JoinRequests, name)
                     break
                 }
             }
