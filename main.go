@@ -466,6 +466,33 @@ func validateSelection(game *Game, selection, category string) bool {
 
 func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     switch msg.Type {
+    case "time_expired":
+        game.Mu.Lock()
+        // Only handle time expiry if it's from the current player
+        if game.Players[game.CurrentPlayer].Name == player.Name {
+            // Add letter to current player
+            for i, p := range game.Players {
+                if i == game.CurrentPlayer {
+                    p.Letters++
+                    if p.Letters >= 4 {
+                        game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                    }
+                    break
+                }
+            }
+            // Start new round
+            game.LastSelection = ""
+            game.LastCategory = ""
+            game.RoundStarted = false
+            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+            game.Timer = nil
+            game.TimeLeft = 30
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            return
+        }
+        game.Mu.Unlock()
+
     case "make_selection":
         var content struct {
             Selection string `json:"selection"`
@@ -682,57 +709,35 @@ func startTimer(game *Game) {
     game.Mu.Unlock()
     broadcastGameState(game)
 
-    done := make(chan bool)
-    ticker := time.NewTicker(time.Second)
+    // Create a timer that will fire after 30 seconds
+    game.Timer = time.NewTimer(30 * time.Second)
     
     go func() {
-        defer ticker.Stop()
-        for {
-            select {
-            case <-done:
-                return
-            case <-ticker.C:
-                game.Mu.Lock()
-                if game.TimeLeft > 0 {
-                    game.TimeLeft--
-                    game.Mu.Unlock()
-                    broadcastGameState(game)
-                    if game.TimeLeft == 0 {
-                        // Time's up - current player gets a letter
-                        game.Mu.Lock()
-                        for i, p := range game.Players {
-                            if i == game.CurrentPlayer {
-                                p.Letters++
-                                if p.Letters >= 4 {
-                                    game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                                }
-                                break
-                            }
-                        }
-                        
-                        // Start new round
-                        game.LastSelection = ""
-                        game.LastCategory = ""
-                        game.RoundStarted = false
-                        game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
-                        game.Timer = nil
-                        game.Mu.Unlock()
-                        broadcastGameState(game)
-                        close(done)
-                        return
-                    }
-                } else {
-                    game.Mu.Unlock()
-                    close(done)
-                    return
+        <-game.Timer.C
+        game.Mu.Lock()
+        
+        // Time's up - current player gets a letter
+        for i, p := range game.Players {
+            if i == game.CurrentPlayer {
+                p.Letters++
+                if p.Letters >= 4 {
+                    game.Players = append(game.Players[:i], game.Players[i+1:]...)
                 }
+                break
             }
         }
+        
+        // Start new round
+        game.LastSelection = ""
+        game.LastCategory = ""
+        game.RoundStarted = false
+        game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+        game.Timer = nil
+        game.TimeLeft = 30
+        game.Mu.Unlock()
+        
+        broadcastGameState(game)
     }()
-
-    // Store the done channel to allow cleanup
-    game.Timer = time.NewTimer(time.Hour) // dummy timer, we'll use the done channel
-    game.Timer.Stop()                     // stop it immediately since we don't use it
 }
 
 func handlePlayerDisconnect(game *Game, player *Player) {

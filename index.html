@@ -150,6 +150,45 @@
         shouldReconnect: true,
         reconnectAttempts: 0,
         maxReconnectAttempts: 5,
+        timerInterval: null,
+        turnStartTime: null,
+        timeLeft: 30,
+      }
+
+      // Function to start local countdown
+      function startLocalCountdown() {
+        // Clear any existing timer
+        stopLocalCountdown()
+
+        // Set initial state
+        gameState.timeLeft = 30
+        gameState.turnStartTime = Date.now()
+        const countdownElement = document.getElementById("countdown")
+        countdownElement.textContent = gameState.timeLeft
+
+        // Start local countdown
+        gameState.timerInterval = setInterval(() => {
+          const elapsed = Math.floor(
+            (Date.now() - gameState.turnStartTime) / 1000
+          )
+          gameState.timeLeft = Math.max(30 - elapsed, 0)
+          countdownElement.textContent = gameState.timeLeft
+
+          if (gameState.timeLeft === 0) {
+            stopLocalCountdown()
+            // Notify server that time has expired
+            ws.send(JSON.stringify({ type: "time_expired" }))
+          }
+        }, 100) // Update more frequently for smoother display
+      }
+
+      // Function to stop local countdown
+      function stopLocalCountdown() {
+        if (gameState.timerInterval) {
+          clearInterval(gameState.timerInterval)
+          gameState.timerInterval = null
+          gameState.turnStartTime = null
+        }
       }
 
       // Check for existing game in localStorage on page load
@@ -241,9 +280,13 @@
       function handleWebSocketMessage(message) {
         switch (message.type) {
           case "game_state":
+            // Stop any existing countdown before updating game state
+            stopLocalCountdown()
             updateGameState(message.game)
             break
           case "game_ended":
+            // Stop countdown when game ends
+            stopLocalCountdown()
             handleGameEnded(message)
             break
           case "available_games":
@@ -330,10 +373,16 @@
           document.getElementById("current-player").textContent =
             currentPlayerName || ""
 
-          // Update countdown if it exists
-          const countdownElement = document.getElementById("countdown")
-          if (game.timeLeft !== undefined) {
-            countdownElement.textContent = game.timeLeft
+          // Handle timer based on game state
+          if (game.inProgress) {
+            // Only start a new timer if this is a new turn
+            if (game.timeLeft === 30) {
+              startLocalCountdown()
+            } else if (game.timeLeft === 0) {
+              stopLocalCountdown()
+            }
+          } else {
+            stopLocalCountdown()
           }
 
           // Show/hide search widgets based on whether it's the current player's turn
@@ -617,6 +666,8 @@
         })
 
       function makeSelection(selection, category) {
+        // Stop countdown when making a selection
+        stopLocalCountdown()
         ws.send(
           JSON.stringify({
             type: "make_selection",
@@ -645,10 +696,14 @@
       // Challenge and Give Up functionality remains similar to before,
       // but now sends WebSocket messages instead of handling locally
       document.getElementById("challenge").addEventListener("click", () => {
+        // Stop countdown when challenging
+        stopLocalCountdown()
         ws.send(JSON.stringify({ type: "challenge" }))
       })
 
       document.getElementById("give-up").addEventListener("click", () => {
+        // Stop countdown when giving up
+        stopLocalCountdown()
         ws.send(JSON.stringify({ type: "give_up" }))
       })
 
