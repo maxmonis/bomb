@@ -108,6 +108,9 @@
         playerName: null,
         isCreator: false,
         usedItems: new Set(),
+        shouldReconnect: true,
+        reconnectAttempts: 0,
+        maxReconnectAttempts: 5,
       }
 
       // Check for existing game in localStorage on page load
@@ -120,31 +123,76 @@
         }
       })
 
-      function connectToGame(gameId, playerName) {
-        ws = new WebSocket(`ws://${window.location.host}/ws`)
+      function connectToGame(gameId, playerName, isReconnect = false) {
+        try {
+          ws = new WebSocket(`ws://${window.location.host}/ws`, ["websocket"])
 
-        ws.onopen = () => {
-          ws.send(
-            JSON.stringify({
-              type: "connect",
-              gameId: gameId,
-              name: playerName,
-            })
-          )
+          ws.onopen = () => {
+            // Reset reconnection attempts on successful connection
+            gameState.reconnectAttempts = 0
+            gameState.shouldReconnect = true
+
+            ws.send(
+              JSON.stringify({
+                type: "connect",
+                gameId: gameId,
+                name: playerName,
+                isReconnect: isReconnect,
+              })
+            )
+          }
+
+          ws.onerror = (error) => {
+            console.error("WebSocket error:", error)
+            if (ws.readyState !== WebSocket.OPEN) {
+              // If the connection failed to open, try to reconnect
+              handleReconnection()
+            }
+          }
+
+          ws.onmessage = (event) => {
+            const message = JSON.parse(event.data)
+            handleWebSocketMessage(message)
+          }
+
+          ws.onclose = (event) => {
+            console.log("WebSocket closed with code:", event.code)
+            handleReconnection()
+          }
+        } catch (error) {
+          console.error("Error creating WebSocket:", error)
+          handleReconnection()
         }
+      }
 
-        ws.onmessage = (event) => {
-          const message = JSON.parse(event.data)
-          handleWebSocketMessage(message)
-        }
+      function handleReconnection() {
+        // Only try to reconnect if we haven't received a game not found error
+        // and haven't exceeded max attempts
+        if (
+          gameState.shouldReconnect &&
+          gameState.reconnectAttempts < gameState.maxReconnectAttempts
+        ) {
+          gameState.reconnectAttempts++
+          const delay = Math.min(1000 * gameState.reconnectAttempts, 5000) // Max 5 second delay
+          console.log(`Attempting to reconnect in ${delay / 1000} seconds...`)
 
-        ws.onclose = () => {
-          // Try to reconnect if game is still active
           setTimeout(() => {
             if (gameState.id) {
-              connectToGame(gameState.id, gameState.playerName)
+              connectToGame(gameState.id, gameState.playerName, true)
             }
-          }, 1000)
+          }, delay)
+        } else if (
+          gameState.reconnectAttempts >= gameState.maxReconnectAttempts
+        ) {
+          // If we've exceeded max attempts, clear game state and return to lobby
+          localStorage.removeItem("gameId")
+          localStorage.removeItem("playerName")
+          gameState.id = null
+          gameState.playerName = null
+          document.getElementById("lobby").classList.remove("hidden")
+          document.getElementById("waiting-room").classList.add("hidden")
+          document.getElementById("game-area").classList.add("hidden")
+          alert("Unable to connect to game. Please try again.")
         }
       }
 
@@ -157,6 +205,15 @@
             handleGameEnded(message)
             break
           case "error":
+            if (message.message === "Game not found") {
+              // Stop reconnection attempts if game doesn't exist
+              gameState.shouldReconnect = false
+              localStorage.removeItem("gameId")
+              localStorage.removeItem("playerName")
+              document.getElementById("lobby").classList.remove("hidden")
+              document.getElementById("waiting-room").classList.add("hidden")
+              document.getElementById("game-area").classList.add("hidden")
+            }
             alert(message.message)
             break
         }
@@ -282,7 +339,7 @@
         if (playerName && gameId) {
           gameState.playerName = playerName
           gameState.id = gameId
-          connectToGame(gameId, playerName)
+          connectToGame(gameId, playerName, true)
 
           document.getElementById("lobby").classList.add("hidden")
           document.getElementById("waiting-room").classList.remove("hidden")

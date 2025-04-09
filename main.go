@@ -62,6 +62,10 @@ var (
 		CheckOrigin: func(r *http.Request) bool {
 			return true // Allow all origins for now
 		},
+		// Add explicit headers for Safari
+		EnableCompression: true,
+		HandshakeTimeout: 10 * time.Second,
+		Subprotocols: []string{"websocket"},
 	}
 )
 
@@ -283,6 +287,17 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+    // Add required headers for Safari
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+    // Handle preflight OPTIONS request
+    if r.Method == "OPTIONS" {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
     conn, err := upgrader.Upgrade(w, r, nil)
     if err != nil {
         log.Printf("WebSocket upgrade failed: %v", err)
@@ -332,19 +347,38 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    // Handle new connection
-    player := &Player{
-        Name: msg.Name,
-        Conn: conn,
-    }
+    // For new connections, check if player has been admitted
+    if _, exists := game.JoinRequests[msg.Name]; exists {
+        player := &Player{
+            Name: msg.Name,
+            Conn: conn,
+        }
 
-    if len(game.Players) == 0 {
+        // Remove from join requests since they're now connecting
+        delete(game.JoinRequests, msg.Name)
+        
+        // Add to active players
+        game.Players = append(game.Players, player)
+        broadcastGameState(game)
+        go handleConnection(conn, game, player)
+    } else if len(game.Players) == 0 {
+        // First player (creator) can always connect
+        player := &Player{
+            Name: msg.Name,
+            Conn: conn,
+        }
         game.CreatorID = msg.Name
+        game.Players = append(game.Players, player)
+        broadcastGameState(game)
+        go handleConnection(conn, game, player)
+    } else {
+        // Player trying to connect without being admitted
+        conn.WriteJSON(map[string]string{
+            "type": "error",
+            "message": "Not authorized to join this game",
+        })
+        conn.Close()
     }
-
-    game.Players = append(game.Players, player)
-    broadcastGameState(game)
-    go handleConnection(conn, game, player)
 }
 
 func handleConnection(conn *websocket.Conn, game *Game, player *Player) {
@@ -482,8 +516,11 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         
         game.mu.Lock()
         if player.Name == game.CreatorID && !game.InProgress {
+            // Only delete from JoinRequests if the player hasn't connected yet
             if _, exists := game.JoinRequests[content.PlayerName]; exists {
-                delete(game.JoinRequests, content.PlayerName)
+                // Leave request in place until player connects via WebSocket
+                // The actual player addition happens in handleWebSocket
+                // Just notify the waiting player that they've been admitted
                 broadcastGameState(game)
             }
         }
