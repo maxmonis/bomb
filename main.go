@@ -246,45 +246,74 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleJoinGame(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
 
-	var req struct {
-		GameID  string `json:"gameId"`
-		Name    string `json:"name"`
-		Message string `json:"message"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+    var req struct {
+        GameID  string `json:"gameId"`
+        Name    string `json:"name"`
+        Message string `json:"message"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
 
-	gamesMutex.Lock()
-	game, exists := games[req.GameID]
-	gamesMutex.Unlock()
+    if req.GameID == "" || req.Name == "" {
+        http.Error(w, "GameID and Name are required", http.StatusBadRequest)
+        return
+    }
 
-	if !exists {
-		http.Error(w, "Game not found", http.StatusNotFound)
-		return
-	}
+    gamesMutex.Lock()
+    game, exists := games[req.GameID]
+    if !exists {
+        gamesMutex.Unlock()
+        http.Error(w, "Game not found", http.StatusNotFound)
+        return
+    }
+    gamesMutex.Unlock()
 
-	if game.InProgress {
-		http.Error(w, "Game already in progress", http.StatusBadRequest)
-		return
-	}
+    game.mu.Lock()
+    defer game.mu.Unlock()
 
-	// Add join request
-	game.mu.Lock()
-	game.JoinRequests[req.Name] = JoinRequest{Name: req.Name, Message: req.Message}
-	game.mu.Unlock()
+    // Check if player name is already taken
+    for _, player := range game.Players {
+        if player.Name == req.Name {
+            http.Error(w, "Player name already taken", http.StatusConflict)
+            return
+        }
+    }
 
-	// Notify creator
-	broadcastGameState(game)
+    if game.InProgress {
+        http.Error(w, "Game already in progress", http.StatusBadRequest)
+        return
+    }
 
-	// Return success, actual joining happens in WebSocket connection
-	w.WriteHeader(http.StatusOK)
+    // Add join request
+    game.JoinRequests[req.Name] = JoinRequest{Name: req.Name, Message: req.Message}
+
+    // Notify creator about the new join request
+    state := struct {
+        Type    string `json:"type"`
+        Game    *Game  `json:"game"`
+    }{
+        Type: "game_state",
+        Game: game,
+    }
+
+    // Try to notify creator
+    for _, player := range game.Players {
+        if player.Name == game.CreatorID {
+            if err := player.Conn.WriteJSON(state); err != nil {
+                log.Printf("Failed to notify creator about new join request: %v", err)
+            }
+            break
+        }
+    }
+
+    w.WriteHeader(http.StatusOK)
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -655,9 +684,36 @@ func broadcastGameState(game *Game) {
 		Game: game,
 	}
 
+	var failedPlayers []*Player
 	for _, player := range game.Players {
-		if err := player.Conn.WriteJSON(state); err != nil {
-			log.Printf("Error broadcasting to player %s: %v", player.Name, err)
+		// Try to send the state up to 3 times
+		var err error
+		for attempts := 0; attempts < 3; attempts++ {
+			if err = player.Conn.WriteJSON(state); err == nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err != nil {
+			log.Printf("Error broadcasting to player %s after retries: %v", player.Name, err)
+			failedPlayers = append(failedPlayers, player)
+		}
+	}
+
+	// Remove players who couldn't receive the update
+	for _, failedPlayer := range failedPlayers {
+		for i, p := range game.Players {
+			if p == failedPlayer {
+				game.Players = append(game.Players[:i], game.Players[i+1:]...)
+				// If this was the creator, end the game
+				if failedPlayer.Name == game.CreatorID {
+					gamesMutex.Lock()
+					delete(games, game.ID)
+					gamesMutex.Unlock()
+					return
+				}
+				break
+			}
 		}
 	}
 }

@@ -367,25 +367,24 @@
               body: JSON.stringify({ gameId, name: playerName, message }),
             })
 
-            if (response.ok) {
-              gameState.id = gameId
-              gameState.playerName = playerName
-
-              // Save to localStorage
-              localStorage.setItem("gameId", gameId)
-              localStorage.setItem("playerName", playerName)
-
-              document.getElementById("lobby").classList.add("hidden")
-              document.getElementById("waiting-room").classList.remove("hidden")
-              document.getElementById("game-id-display").textContent = gameId
-
-              connectToGame(gameId, playerName)
-            } else {
+            if (!response.ok) {
               const error = await response.text()
-              alert(error)
+              throw new Error(error)
             }
+
+            // Save to localStorage
+            localStorage.setItem("gameId", gameId)
+            localStorage.setItem("playerName", playerName)
+
+            // Show waiting room and hide lobby
+            document.getElementById("lobby").classList.add("hidden")
+            document.getElementById("waiting-room").classList.remove("hidden")
+            document.getElementById("game-id-display").textContent = gameId
+
+            // Connect to WebSocket after join request is accepted
+            connectToGame(gameId, playerName)
           } catch (error) {
-            alert("Failed to join game")
+            alert(error.message)
           }
         })
 
