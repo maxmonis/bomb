@@ -3,53 +3,259 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BOMB</title>
+    <title>BOMB Game</title>
+    <style>
+      #countdown {
+        font-size: 2em;
+        color: red;
+      }
+      #game-area {
+        display: none;
+      }
+      .player-status {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 20px;
+      }
+      .player {
+        text-align: center;
+      }
+      .bomb-letter {
+        color: gray;
+        font-size: 1.5em;
+      }
+      .bomb-letter.red {
+        color: red;
+      }
+    </style>
   </head>
   <body>
-    <h1>BOMB</h1>
+    <h1>BOMB Game</h1>
 
-    <div>
-      <input type="radio" id="actor" name="category" value="actor" checked />
-      <label for="actor">Actor</label>
-      <input type="radio" id="movie" name="category" value="movie" />
-      <label for="movie">Movie</label>
+    <div class="player-status" id="player-status">
+      <!-- Player statuses will be dynamically added here -->
     </div>
 
-    <form id="searchForm">
+    <div id="setup-area">
+      <h2>Setup</h2>
+      <label for="player-count">Number of Players:</label>
+      <input type="number" id="player-count" min="2" max="4" required />
+      <div id="player-names"></div>
+      <button id="start-game">Start Game</button>
+    </div>
+
+    <div id="game-area">
+      <h2>Current Player: <span id="current-player"></span></h2>
+      <div id="countdown">30</div>
+      <div id="category-selection">
+        <label
+          ><input type="radio" name="category" value="movie" checked />
+          Movie</label
+        >
+        <label
+          ><input type="radio" name="category" value="actor" /> Actor</label
+        >
+      </div>
+      <p id="instruction-text"></p>
       <input
         type="text"
-        id="searchQuery"
-        placeholder="Enter search term"
-        required
+        id="search-bar"
+        placeholder="Search for a movie or actor"
       />
-      <button type="submit">Search</button>
-    </form>
-    <ul id="results"></ul>
+      <button id="search-button">Search</button>
+      <ul id="search-results"></ul>
+      <button id="challenge">Challenge</button>
+      <ul id="used-items"></ul>
+    </div>
 
     <script>
+      let players = []
+      let currentPlayerIndex = 0
+      let countdownInterval
+      let usedItems = new Set()
+      let lastSelection = null
+      let lastCategory = "movie"
+      const bombLetters = ["B", "O", "M", "B"]
+
+      document.getElementById("start-game").addEventListener("click", () => {
+        const playerCount = parseInt(
+          document.getElementById("player-count").value
+        )
+        if (isNaN(playerCount) || playerCount < 2 || playerCount > 4) {
+          alert("Please enter a valid number of players (2-4).")
+          return
+        }
+
+        players = []
+        for (let i = 0; i < playerCount; i++) {
+          const playerName = prompt(`Enter name for Player ${i + 1}:`)
+          if (!playerName) {
+            alert("Player name cannot be empty.")
+            return
+          }
+          players.push({ name: playerName, letters: 0 })
+        }
+
+        updatePlayerStatus()
+        document.getElementById("setup-area").style.display = "none"
+        document.getElementById("game-area").style.display = "block"
+        document.getElementById("category-selection").style.display = "block"
+        startTurn()
+      })
+
+      function updatePlayerStatus() {
+        const playerStatusDiv = document.getElementById("player-status")
+        playerStatusDiv.innerHTML = ""
+        players.forEach((player) => {
+          const playerDiv = document.createElement("div")
+          playerDiv.className = "player"
+          playerDiv.innerHTML = `<strong>${player.name}</strong><br>`
+          for (let i = 0; i < 4; i++) {
+            const letterSpan = document.createElement("span")
+            letterSpan.className = "bomb-letter"
+            if (i < player.letters) {
+              letterSpan.classList.add("red")
+            }
+            letterSpan.textContent = bombLetters[i]
+            playerDiv.appendChild(letterSpan)
+          }
+          playerStatusDiv.appendChild(playerDiv)
+        })
+      }
+
+      function startTurn() {
+        const currentPlayer = players[currentPlayerIndex]
+        document.getElementById("current-player").textContent =
+          currentPlayer.name
+
+        if (lastSelection) {
+          const instructionText = document.getElementById("instruction-text")
+          if (lastCategory === "movie") {
+            instructionText.textContent = `Name another actor from ${lastSelection}`
+            lastCategory = "actor"
+          } else {
+            instructionText.textContent = `Name another movie starring ${lastSelection}`
+            lastCategory = "movie"
+          }
+          document.getElementById("category-selection").style.display = "none"
+        } else {
+          document.getElementById("category-selection").style.display = "block"
+        }
+
+        startCountdown()
+      }
+
+      function startCountdown() {
+        let timeLeft = 30
+        document.getElementById("countdown").textContent = timeLeft
+
+        clearInterval(countdownInterval)
+        countdownInterval = setInterval(() => {
+          timeLeft--
+          document.getElementById("countdown").textContent = timeLeft
+
+          if (timeLeft <= 0) {
+            clearInterval(countdownInterval)
+            handleTimeout()
+          }
+        }, 1000)
+      }
+
+      function handleTimeout() {
+        alert(`${players[currentPlayerIndex].name} ran out of time!`)
+        addLetterToPlayer(currentPlayerIndex)
+        nextTurn()
+      }
+
+      document.querySelectorAll('input[name="category"]').forEach((radio) => {
+        radio.addEventListener("change", () => {
+          lastCategory = radio.value
+        })
+      })
+
       document
-        .querySelector("#searchForm")
-        .addEventListener("submit", async function (event) {
-          event.preventDefault()
+        .getElementById("search-button")
+        .addEventListener("click", async () => {
+          const query = document.getElementById("search-bar").value.trim()
+          if (!query) {
+            alert("Search query cannot be empty.")
+            return
+          }
 
-          let category = document.querySelector(
-            'input[name="category"]:checked'
-          ).value
-
-          let query = document.getElementById("searchQuery").value
-          let response = await fetch(
+          const category =
+            lastCategory ||
+            document.querySelector('input[name="category"]:checked').value
+          const response = await fetch(
             `/search?query=${encodeURIComponent(query)}&category=${category}`
           )
-          let { titles } = await response.json()
+          const results = await response.json()
 
-          let resultsList = document.getElementById("results")
+          const resultsList = document.getElementById("search-results")
           resultsList.innerHTML = ""
-          for (let title of titles) {
-            let listItem = document.createElement("li")
-            listItem.textContent = title
+          results.forEach((result) => {
+            const listItem = document.createElement("li")
+            listItem.textContent = result
+            const selectButton = document.createElement("button")
+            selectButton.textContent = "Select"
+            if (usedItems.has(result)) {
+              selectButton.disabled = true
+            }
+            selectButton.addEventListener("click", () => {
+              if (usedItems.has(result)) {
+                alert("This item has already been used.")
+                return
+              }
+
+              usedItems.add(result)
+              const usedItem = document.createElement("li")
+              usedItem.textContent = result
+              document.getElementById("used-items").appendChild(usedItem)
+
+              lastSelection = result
+              document.getElementById("search-results").innerHTML = ""
+              nextTurn()
+            })
+            listItem.appendChild(selectButton)
             resultsList.appendChild(listItem)
-          }
+          })
         })
+
+      document.getElementById("challenge").addEventListener("click", () => {
+        const previousPlayerIndex =
+          (currentPlayerIndex - 1 + players.length) % players.length
+        const previousPlayer = players[previousPlayerIndex]
+
+        const isValid = confirm(
+          `${previousPlayer.name}, can you provide a valid selection?`
+        )
+        if (isValid) {
+          addLetterToPlayer(currentPlayerIndex)
+        } else {
+          addLetterToPlayer(previousPlayerIndex)
+        }
+
+        nextTurn()
+      })
+
+      function addLetterToPlayer(playerIndex) {
+        players[playerIndex].letters++
+        updatePlayerStatus()
+
+        if (players[playerIndex].letters >= 4) {
+          alert(`${players[playerIndex].name} has been eliminated!`)
+          players.splice(playerIndex, 1)
+          if (players.length === 1) {
+            alert(`${players[0].name} is the winner!`)
+            location.reload()
+          }
+          currentPlayerIndex = playerIndex % players.length
+        }
+      }
+
+      function nextTurn() {
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length
+        startTurn()
+      }
     </script>
   </body>
 </html>

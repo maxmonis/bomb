@@ -130,17 +130,12 @@ func main() {
 			}
 		}
 
-		response := map[string]interface{}{
-			"titles": filteredTitles,
-		}
-
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
+		if err := json.NewEncoder(w).Encode(filteredTitles); err != nil {
 			log.Printf("Failed to encode JSON response: %v\n", err)
 			http.Error(w, "Failed to encode JSON response", http.StatusInternalServerError)
 		}
 
-		log.Printf("Response: %v\n", response)
 	})
 
 	// Start the server
