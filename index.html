@@ -35,6 +35,14 @@
         padding: 10px;
         border: 1px solid #ccc;
       }
+      #pending-message {
+        margin: 20px 0;
+        padding: 10px;
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        border-radius: 4px;
+        color: #856404;
+      }
     </style>
   </head>
   <body>
@@ -67,6 +75,9 @@
     <div id="waiting-room" class="hidden">
       <h2>Waiting Room</h2>
       <p>Game ID: <span id="game-id-display"></span></p>
+      <div id="pending-message" class="hidden">
+        <p>Waiting for the creator to admit you to the game...</p>
+      </div>
       <h3>Players:</h3>
       <ul id="players-list"></ul>
       <div id="creator-controls" class="hidden">
@@ -236,6 +247,7 @@
         const gameArea = document.getElementById("game-area")
         const playersList = document.getElementById("players-list")
         const creatorControls = document.getElementById("creator-controls")
+        const pendingMessage = document.getElementById("pending-message")
 
         // Clear the players list
         playersList.innerHTML = ""
@@ -257,10 +269,18 @@
         // Update isCreator flag based on game state
         gameState.isCreator = game.creatorId === gameState.playerName
 
+        // Check if current user is in a pending state
+        const isPending =
+          !gameState.isCreator &&
+          game.joinRequests &&
+          game.joinRequests[gameState.playerName] &&
+          !game.players.some((p) => p.name === gameState.playerName)
+
         if (game.inProgress) {
           statusDiv.classList.remove("hidden")
           waitingRoom.classList.add("hidden")
           gameArea.classList.remove("hidden")
+          pendingMessage.classList.add("hidden")
 
           // Update current player display
           const currentPlayerName = game.players[game.currentPlayer]?.name
@@ -294,6 +314,15 @@
           waitingRoom.classList.remove("hidden")
           gameArea.classList.add("hidden")
           document.getElementById("game-id-display").textContent = game.id
+
+          // Show/hide pending message
+          if (isPending) {
+            pendingMessage.classList.remove("hidden")
+            playersList.classList.add("hidden")
+          } else {
+            pendingMessage.classList.add("hidden")
+            playersList.classList.remove("hidden")
+          }
 
           // Update creator controls
           if (gameState.isCreator) {
@@ -552,17 +581,12 @@
           const joinButton = document.createElement("button")
           joinButton.textContent = "Join Game"
           joinButton.onclick = () => {
-            joinGame(gameId)
+            document.getElementById("game-id").value = gameId
           }
           li.textContent = `Game: ${gameId} `
           li.appendChild(joinButton)
           gamesList.appendChild(li)
         })
-      }
-
-      function joinGame(gameId) {
-        localStorage.setItem("gameId", gameId)
-        location.reload()
       }
 
       // Initialize WebSocket connection when page loads

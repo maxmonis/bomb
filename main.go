@@ -370,7 +370,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     game, exists := games[msg.GameID]
     gamesMutex.Unlock()
 
-    if !exists {
+    if (!exists) {
         conn.WriteJSON(map[string]string{
             "type": "error",
             "message": "Game not found",
@@ -384,6 +384,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     
     var player *Player
     if msg.IsReconnect {
+        // Check if player was previously admitted
         for _, p := range game.Players {
             if p.Name == msg.Name {
                 p.Conn = conn
@@ -391,7 +392,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
                 break
             }
         }
-    } else if len(game.Players) == 0 && msg.Name == game.CreatorID {
+    } else if msg.Name == game.CreatorID {
         // First player joining must be the creator
         player = &Player{
             Name: msg.Name,
@@ -400,23 +401,23 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         }
         game.Players = append(game.Players, player)
     } else {
-        // Check if player is already in the game
-        for _, p := range game.Players {
-            if p.Name == msg.Name {
-                p.Conn = conn
-                player = p
-                break
-            }
+        // For non-creator players, just store their connection
+        // They will be added to Players array when admitted by creator
+        player = &Player{
+            Name: msg.Name,
+            Conn: conn,
+            IsActive: false,
         }
-        
-        // If not in game, keep their connection but don't add them yet
-        if player == nil {
-            player = &Player{
-                Name: msg.Name,
-                Conn: conn,
-                IsActive: false,
-            }
-        }
+    }
+
+    if player == nil {
+        game.mu.Unlock()
+        conn.WriteJSON(map[string]string{
+            "type": "error",
+            "message": "Not authorized to join this game",
+        })
+        conn.Close()
+        return
     }
 
     game.mu.Unlock()

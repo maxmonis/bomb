@@ -1,0 +1,1 @@
+use camelCase for all variable, function, and property names
