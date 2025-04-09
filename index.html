@@ -7,7 +7,6 @@
     <style>
       #countdown {
         font-size: 2em;
-        color: red;
       }
       .hidden {
         display: none;
@@ -15,16 +14,22 @@
       .player-status {
         display: flex;
         justify-content: space-around;
-        margin-bottom: 20px;
+        margin: 20px 0;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
       }
       .player {
         text-align: center;
+        margin: 0 20px;
+        padding: 10px;
       }
       .bomb-letter {
         color: gray;
         font-size: 1.5em;
       }
-      .bomb-letter.red {
+      .red {
         color: red;
       }
       #join-requests {
@@ -173,11 +178,25 @@
           )
           gameState.timeLeft = Math.max(30 - elapsed, 0)
           countdownElement.textContent = gameState.timeLeft
+          countdownElement.classList.toggle("red", gameState.timeLeft <= 10)
 
           if (gameState.timeLeft === 0) {
             stopLocalCountdown()
-            // Notify server that time has expired
+            // When time expires, notify server and wait for new game state
             ws.send(JSON.stringify({ type: "time_expired" }))
+            // Update UI immediately to show time is up
+            document.getElementById("countdown").textContent = "0"
+            document.getElementById("instruction-text").textContent =
+              "Time's up!"
+            // Hide all game controls immediately
+            document
+              .getElementById("category-selection")
+              .classList.add("hidden")
+            document.getElementById("search-bar").classList.add("hidden")
+            document.getElementById("search-button").classList.add("hidden")
+            document.getElementById("search-results").innerHTML = ""
+            document.getElementById("challenge").classList.add("hidden")
+            document.getElementById("give-up").classList.add("hidden")
           }
         }, 100) // Update more frequently for smoother display
       }
@@ -341,9 +360,11 @@
         // Always update the players list when we have players
         game.players.forEach((player) => {
           const li = document.createElement("li")
-          li.textContent = `${player.name}${
-            player.name === game.creatorId ? " (Creator)" : ""
-          }`
+          // Set player name, followed by (You) if it's the current player
+          li.textContent = player.name
+          if (player.name === gameState.currentPlayer) {
+            li.textContent += " (You)"
+          }
           // Add BOMB letters if any
           if (player.letters > 0) {
             const letters = "BOMB".slice(0, player.letters)
@@ -368,18 +389,84 @@
           gameArea.classList.remove("hidden")
           pendingMessage.classList.add("hidden")
 
+          // Update player status display
+          statusDiv.innerHTML = ""
+          game.players.forEach((player) => {
+            const playerDiv = document.createElement("div")
+            playerDiv.className = "player"
+
+            // Add player name
+            const nameDiv = document.createElement("div")
+            nameDiv.textContent = player.name
+            playerDiv.appendChild(nameDiv)
+
+            // Add BOMB display
+            const bombDiv = document.createElement("div")
+            "BOMB".split("").forEach((letter, index) => {
+              const span = document.createElement("span")
+              span.textContent = letter
+              span.className = "bomb-letter"
+              if (index < player.letters) {
+                span.classList.add("red")
+              }
+              bombDiv.appendChild(span)
+            })
+            playerDiv.appendChild(bombDiv)
+
+            statusDiv.appendChild(playerDiv)
+          })
+
           // Update current player display
           const currentPlayerName = game.players[game.currentPlayer]?.name
           document.getElementById("current-player").textContent =
             currentPlayerName || ""
 
-          // Handle timer based on game state
+          // Handle timer and UI based on game state
           if (game.inProgress) {
-            // Only start a new timer if this is a new turn
+            const isCurrentPlayer = currentPlayerName === gameState.playerName
+
             if (game.timeLeft === 30) {
-              startLocalCountdown()
+              // Fresh turn state
+              countdownElement.textContent = "30"
+              if (isCurrentPlayer) {
+                startLocalCountdown()
+                searchWidgets.classList.remove("hidden")
+                searchBar.classList.remove("hidden")
+                searchButton.classList.remove("hidden")
+                document.getElementById("instruction-text").textContent =
+                  "Your turn! Search for a movie or actor"
+              } else {
+                stopLocalCountdown()
+                searchWidgets.classList.add("hidden")
+                searchBar.classList.add("hidden")
+                searchButton.classList.add("hidden")
+                searchResults.innerHTML = ""
+                document.getElementById(
+                  "instruction-text"
+                ).textContent = `${currentPlayerName} is thinking...`
+              }
             } else if (game.timeLeft === 0) {
+              // Time expired state
               stopLocalCountdown()
+              countdownElement.textContent = "0"
+              searchWidgets.classList.add("hidden")
+              searchBar.classList.add("hidden")
+              searchButton.classList.add("hidden")
+              searchResults.innerHTML = ""
+              document.getElementById("instruction-text").textContent =
+                "Time's up!"
+              document.getElementById("challenge").classList.add("hidden")
+              document.getElementById("give-up").classList.add("hidden")
+            } else if (!isCurrentPlayer) {
+              // Not current player's turn
+              stopLocalCountdown()
+              searchWidgets.classList.add("hidden")
+              searchBar.classList.add("hidden")
+              searchButton.classList.add("hidden")
+              searchResults.innerHTML = ""
+              document.getElementById(
+                "instruction-text"
+              ).textContent = `${currentPlayerName} is thinking...`
             }
           } else {
             stopLocalCountdown()
