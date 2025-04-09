@@ -124,6 +124,7 @@
       }
 
       function startTurn() {
+        clearInput()
         const currentPlayer = players[currentPlayerIndex]
         document.getElementById("current-player").textContent =
           currentPlayer.name
@@ -131,10 +132,10 @@
         if (lastSelection) {
           const instructionText = document.getElementById("instruction-text")
           if (lastCategory === "movie") {
-            instructionText.textContent = `Name another actor from ${lastSelection}`
+            instructionText.textContent = `Name an actor from ${lastSelection}`
             lastCategory = "actor"
           } else {
-            instructionText.textContent = `Name another movie starring ${lastSelection}`
+            instructionText.textContent = `Name a movie starring ${lastSelection}`
             lastCategory = "movie"
           }
           document.getElementById("category-selection").style.display = "none"
@@ -165,6 +166,11 @@
         alert(`${players[currentPlayerIndex].name} ran out of time!`)
         addLetterToPlayer(currentPlayerIndex)
         nextTurn()
+      }
+
+      function clearInput() {
+        document.getElementById("search-bar").value = ""
+        document.getElementById("search-results").innerHTML = ""
       }
 
       document.querySelectorAll('input[name="category"]').forEach((radio) => {
@@ -282,6 +288,12 @@
             location.reload()
           }
           currentPlayerIndex = playerIndex % players.length
+        } else {
+          alert(
+            `${players[playerIndex].name} has ${bombLetters
+              .slice(0, players[playerIndex].letters)
+              .join("")}!`
+          )
         }
       }
 
