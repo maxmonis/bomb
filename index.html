@@ -256,10 +256,10 @@
       document.getElementById("give-up").addEventListener("click", () => {
         // The current player (who was challenged) gets a letter
         addLetterToPlayer(currentPlayerIndex)
-        
+
         // Reset challenge state
         delete window.challengeState
-        
+
         // Start new round
         lastSelection = null
         lastCategory = null
