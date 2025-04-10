@@ -2,14 +2,48 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BOMB Game</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>BOMB</title>
     <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        padding: 1.5rem;
+      }
+      button {
+        background-color: #007bff;
+        border-radius: 0.25rem;
+        border: none;
+        color: #fff;
+        cursor: pointer;
+        padding: 0.375rem 0.5rem;
+      }
+      button[disabled] {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      input,
+      textarea {
+        border-radius: 0.25rem;
+        padding: 0.25rem 0.5rem;
+      }
       #countdown {
         font-size: 2em;
       }
       .hidden {
         display: none;
+      }
+      #join-game {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
       }
       .player-status {
         display: flex;
@@ -72,7 +106,7 @@
     </style>
   </head>
   <body>
-    <h1>BOMB Game</h1>
+    <h1>BOMB</h1>
 
     <div id="lobby" class="hidden">
       <h2>Game Lobby</h2>
@@ -89,11 +123,11 @@
         <h3>Join Game</h3>
         <input type="text" id="game-id" placeholder="Enter game ID" />
         <input type="text" id="player-name" placeholder="Enter your name" />
-        <input
+        <textarea
           type="text"
           id="join-message"
           placeholder="Message to creator (optional)"
-        />
+        ></textarea>
         <button id="join-game-btn">Join Game</button>
       </div>
     </div>
