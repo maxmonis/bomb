@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -295,7 +294,11 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    gameID := uuid.New().String()
+    // Generate game ID using creator name and last 8 digits of current timestamp
+    timestamp := time.Now().UnixNano()
+    lastEightDigits := fmt.Sprintf("%08d", timestamp%100000000)
+    gameID := fmt.Sprintf("%s-%s", req.CreatorName, lastEightDigits)
+
     game := &Game{
         ID:           gameID,
         CreatorID:    req.CreatorName,
