@@ -127,7 +127,7 @@
         color: #495057;
         margin-block-start: 0.5rem;
       }
-      #pending-message {
+      .pending-message {
         background-color: #fff3cd;
         border-radius: 0.25rem;
         border: 1px solid #ffeeba;
@@ -231,12 +231,15 @@
       <div id="waiting-room" class="hidden">
         <h2>Waiting Room</h2>
         <p>Game ID: <span id="game-id-display"></span></p>
-        <div id="pending-message" class="hidden">
+        <div id="waiting-for-admission" class="hidden pending-message">
           <p>Waiting for the creator to admit you to the game...</p>
         </div>
         <div class="players">
           <h3>Players:</h3>
           <p id="players-list"></p>
+          <p id="waiting-for-start" class="hidden pending-message">
+            Waiting for the creator to start the game...
+          </p>
         </div>
         <div id="creator-controls" class="hidden">
           <h3>Pending Players:</h3>
@@ -522,7 +525,9 @@
             break
           case "join_accepted":
             // Remove pending message when accepted
-            document.getElementById("pending-message").classList.add("hidden")
+            document
+              .getElementById("waiting-for-admission")
+              .classList.add("hidden")
             document.getElementById("players-list").classList.remove("hidden")
             break
         }
@@ -766,7 +771,7 @@
         let gameArea = document.getElementById("game-area")
         let playersList = document.getElementById("players-list")
         let creatorControls = document.getElementById("creator-controls")
-        let pendingMessage = document.getElementById("pending-message")
+        let pendingMessage = document.getElementById("waiting-for-admission")
         let searchWidgets = document.getElementById("category")
         let searchBar = document.getElementById("search-bar")
         let searchButton = document.getElementById("search-button")
@@ -790,6 +795,17 @@
           game.joinRequests &&
           game.joinRequests[gameState.playerName] &&
           !game.players.some((p) => p.name === gameState.playerName)
+
+        // Hide players heading when pending
+        document.querySelector(".players").classList.toggle("hidden", isPending)
+
+        // Show "waiting for start" message when admitted but game not started
+        document
+          .getElementById("waiting-for-start")
+          .classList.toggle(
+            "hidden",
+            isPending || game.inProgress || gameState.isCreator
+          )
 
         if (game.inProgress) {
           statusDiv.classList.remove("hidden")
