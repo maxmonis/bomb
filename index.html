@@ -368,7 +368,7 @@
           }
 
           ws.onmessage = (event) => {
-            const message = JSON.parse(event.data)
+            let message = JSON.parse(event.data)
             handleWebSocketMessage(message)
           }
 
@@ -382,17 +382,16 @@
       }
 
       function connectToLobby() {
-        const wsProtocol =
-          window.location.protocol === "https:" ? "wss:" : "ws:"
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws`
-        const socket = new WebSocket(wsUrl)
+        let wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+        let wsUrl = `${wsProtocol}//${window.location.host}/ws`
+        let socket = new WebSocket(wsUrl)
 
         socket.onopen = () => {
           socket.send(JSON.stringify({ type: "lobby" }))
         }
 
         socket.onmessage = (event) => {
-          const data = JSON.parse(event.data)
+          let data = JSON.parse(event.data)
           if (data.type === "available_games") {
             updateGamesList(data.games)
           }
@@ -404,19 +403,19 @@
       }
 
       async function createGame() {
-        const creatorName = document.getElementById("creator-name").value.trim()
+        let creatorName = document.getElementById("creator-name").value.trim()
         if (!creatorName) {
           alert("Please enter your name")
           return
         }
 
-        const response = await fetch("/create-game", {
+        let response = await fetch("/create-game", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ creatorName }),
         })
 
-        const data = await response.json()
+        let data = await response.json()
         gameState.id = data.gameId
         gameState.isCreator = true
         gameState.playerName = creatorName
@@ -461,7 +460,7 @@
           gameState.reconnectAttempts < gameState.maxReconnectAttempts
         ) {
           gameState.reconnectAttempts++
-          const delay = Math.min(1000 * gameState.reconnectAttempts, 5000) // Max 5 second delay
+          let delay = Math.min(1000 * gameState.reconnectAttempts, 5000) // Max 5 second delay
 
           setTimeout(() => {
             if (gameState.id) {
@@ -530,9 +529,9 @@
       }
 
       async function joinGame() {
-        const gameId = document.getElementById("join-game-id").textContent
-        const playerName = document.getElementById("player-name").value.trim()
-        const message = document.getElementById("join-message").value.trim()
+        let gameId = document.getElementById("join-game-id").textContent
+        let playerName = document.getElementById("player-name").value.trim()
+        let message = document.getElementById("join-message").value.trim()
 
         if (!gameId || !playerName) {
           alert("Please enter your name")
@@ -540,14 +539,14 @@
         }
 
         try {
-          const response = await fetch("/join-game", {
+          let response = await fetch("/join-game", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ gameId, name: playerName, message }),
           })
 
           if (!response.ok) {
-            const error = await response.text()
+            let error = await response.text()
             throw new Error(error)
           }
 
@@ -583,7 +582,7 @@
         gameState.usedItems.add(selection)
 
         // Set the opposite category for the next player
-        const nextCategory = category === "movie" ? "actor" : "movie"
+        let nextCategory = category === "movie" ? "actor" : "movie"
         document.querySelector(
           `input[name="category"][value="${nextCategory}"]`
         ).checked = true
@@ -591,7 +590,7 @@
 
       function onLoad() {
         connectToLobby()
-        const savedGameId = localStorage.getItem("gameId")
+        let savedGameId = localStorage.getItem("gameId")
         if (savedGameId) {
           reconnectToGame()
         } else {
@@ -601,8 +600,8 @@
       }
 
       function reconnectToGame() {
-        const playerName = localStorage.getItem("playerName")
-        const gameId = localStorage.getItem("gameId")
+        let playerName = localStorage.getItem("playerName")
+        let gameId = localStorage.getItem("gameId")
         if (playerName && gameId) {
           gameState.playerName = playerName
           gameState.id = gameId
@@ -617,15 +616,15 @@
       }
 
       async function search() {
-        const query = document.getElementById("search-bar").value.trim()
+        let query = document.getElementById("search-bar").value.trim()
         if (!query) return
 
-        const category = document.querySelector(
+        let category = document.querySelector(
           'input[name="category"]:checked'
         )?.value
 
         try {
-          const params = new URLSearchParams({
+          let params = new URLSearchParams({
             query,
             category,
           })
@@ -635,15 +634,15 @@
             params.append("lastSelection", gameState.lastSelection)
           }
 
-          const response = await fetch(`/search?${params}`)
+          let response = await fetch(`/search?${params}`)
 
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
 
-          const results = await response.json()
+          let results = await response.json()
 
-          const resultsList = document.getElementById("search-results")
+          let resultsList = document.getElementById("search-results")
           resultsList.innerHTML = ""
 
           if (!results || results.length === 0) {
@@ -652,9 +651,9 @@
           }
 
           results.forEach((result) => {
-            const li = document.createElement("li")
+            let li = document.createElement("li")
             li.textContent = result
-            const selectBtn = document.createElement("button")
+            let selectBtn = document.createElement("button")
             selectBtn.textContent = "Select"
             // Disable the button if the item has been used before
             selectBtn.disabled = gameState.usedItems.has(result)
@@ -674,7 +673,7 @@
           })
         } catch (error) {
           console.error("Search error:", error)
-          const resultsList = document.getElementById("search-results")
+          let resultsList = document.getElementById("search-results")
           resultsList.innerHTML =
             "<li>Failed to fetch results. Please try again.</li>"
         }
@@ -692,12 +691,12 @@
         // Set initial state
         gameState.timeLeft = 30
         gameState.turnStartTime = Date.now()
-        const countdownElement = document.getElementById("countdown")
+        let countdownElement = document.getElementById("countdown")
         countdownElement.textContent = gameState.timeLeft
 
         // Start local countdown
         gameState.timerInterval = setInterval(() => {
-          const elapsed = Math.floor(
+          let elapsed = Math.floor(
             (Date.now() - gameState.turnStartTime) / 1000
           )
           gameState.timeLeft = Math.max(30 - elapsed, 0)
@@ -734,15 +733,15 @@
 
       function updateGamesList(gameIds) {
         gameIds ??= []
-        const gamesList = document.getElementById("games-list")
-        const joinGameSection = document.getElementById("join-game")
+        let gamesList = document.getElementById("games-list")
+        let joinGameSection = document.getElementById("join-game")
         document
           .getElementById("no-games")
           .classList.toggle("hidden", gameIds.length > 0)
         gamesList.innerHTML = ""
         gameIds.forEach((gameId) => {
-          const li = document.createElement("li")
-          const joinButton = document.createElement("button")
+          let li = document.createElement("li")
+          let joinButton = document.createElement("button")
           joinButton.textContent = "Join Game"
           joinButton.onclick = () => {
             // Show join game form
@@ -762,19 +761,19 @@
       }
 
       function updateGameState(game) {
-        const statusDiv = document.getElementById("player-status")
-        const waitingRoom = document.getElementById("waiting-room")
-        const gameArea = document.getElementById("game-area")
-        const playersList = document.getElementById("players-list")
-        const creatorControls = document.getElementById("creator-controls")
-        const pendingMessage = document.getElementById("pending-message")
-        const searchWidgets = document.getElementById("category")
-        const searchBar = document.getElementById("search-bar")
-        const searchButton = document.getElementById("search-button")
-        const searchResults = document.getElementById("search-results")
-        const countdownElement = document.getElementById("countdown")
-        const selectionHistory = document.getElementById("selection-history")
-        const selectionChain = document.querySelector(".selection-chain")
+        let statusDiv = document.getElementById("player-status")
+        let waitingRoom = document.getElementById("waiting-room")
+        let gameArea = document.getElementById("game-area")
+        let playersList = document.getElementById("players-list")
+        let creatorControls = document.getElementById("creator-controls")
+        let pendingMessage = document.getElementById("pending-message")
+        let searchWidgets = document.getElementById("category")
+        let searchBar = document.getElementById("search-bar")
+        let searchButton = document.getElementById("search-button")
+        let searchResults = document.getElementById("search-results")
+        let countdownElement = document.getElementById("countdown")
+        let selectionHistory = document.getElementById("selection-history")
+        let selectionChain = document.querySelector(".selection-chain")
 
         // Update player list
         playersList.innerHTML = game.players.reduce((acc, player) => {
@@ -786,7 +785,7 @@
         gameState.isCreator = game.creatorId === gameState.playerName
 
         // Check if current user is in a pending state
-        const isPending =
+        let isPending =
           !gameState.isCreator &&
           game.joinRequests &&
           game.joinRequests[gameState.playerName] &&
@@ -801,18 +800,18 @@
           // Update player status display
           statusDiv.innerHTML = ""
           game.players.forEach((player) => {
-            const playerDiv = document.createElement("div")
+            let playerDiv = document.createElement("div")
             playerDiv.className = "player"
 
             // Add player name
-            const nameDiv = document.createElement("div")
+            let nameDiv = document.createElement("div")
             nameDiv.textContent = player.name
             playerDiv.appendChild(nameDiv)
 
             // Add BOMB display
-            const bombDiv = document.createElement("div")
+            let bombDiv = document.createElement("div")
             "BOMB".split("").forEach((letter, index) => {
-              const span = document.createElement("span")
+              let span = document.createElement("span")
               span.textContent = letter
               span.className = "bomb-letter"
               if (index < player.letters) {
@@ -826,12 +825,12 @@
           })
 
           // Update current player display
-          const currentPlayerName = game.players[game.currentPlayer]?.name
+          let currentPlayerName = game.players[game.currentPlayer]?.name
           document.getElementById("current-player").textContent =
             currentPlayerName || ""
 
           // Handle timer and UI based on game state
-          const isCurrentPlayer = currentPlayerName === gameState.playerName
+          let isCurrentPlayer = currentPlayerName === gameState.playerName
           // Only show countdown for current player
           countdownElement.classList.toggle("hidden", !isCurrentPlayer)
           if (isCurrentPlayer) {
@@ -842,8 +841,8 @@
               searchWidgets.classList.remove("hidden")
               searchBar.classList.remove("hidden")
               searchButton.classList.remove("hidden")
-              const lastSelection = game.lastSelection
-              const lastCategory = game.lastCategory
+              let lastSelection = game.lastSelection
+              let lastCategory = game.lastCategory
               document.getElementById("instruction-text").textContent =
                 lastSelection
                   ? lastCategory === "movie"
@@ -881,8 +880,8 @@
             searchBar.classList.remove("hidden")
             searchButton.classList.remove("hidden")
 
-            const lastSelection = game.lastSelection
-            const lastCategory = game.lastCategory
+            let lastSelection = game.lastSelection
+            let lastCategory = game.lastCategory
             document.getElementById("instruction-text").textContent =
               lastSelection
                 ? lastCategory === "movie"
@@ -892,7 +891,7 @@
 
             // Update radio button based on previous selection
             if (game.lastCategory) {
-              const nextCategory =
+              let nextCategory =
                 game.lastCategory === "movie" ? "actor" : "movie"
               document.querySelector(
                 `input[name="category"][value="${nextCategory}"]`
@@ -909,16 +908,16 @@
           }
 
           // Show/hide challenge button
-          const challengeBtn = document.getElementById("challenge")
-          const giveUpBtn = document.getElementById("give-up")
+          let challengeBtn = document.getElementById("challenge")
+          let giveUpBtn = document.getElementById("give-up")
 
           if (game.challengeState) {
             challengeBtn.classList.add("hidden")
             if (game.challengeState.challengedName === gameState.playerName) {
               // Show give up button only to the challenged player
               giveUpBtn.classList.remove("hidden")
-              const lastSelection = game.lastSelection
-              const lastCategory = game.lastCategory
+              let lastSelection = game.lastSelection
+              let lastCategory = game.lastCategory
               document.getElementById(
                 "instruction-text"
               ).textContent = `You've been challenged! Name ${
@@ -953,13 +952,13 @@
             (game.selectionRounds && game.selectionRounds.length > 0) ||
             game.selectionHistory.length > 0
           ) {
-            for (const round of game.selectionRounds ?? [])
-              for (const item of round) gameState.usedItems.add(item)
+            for (let round of game.selectionRounds ?? [])
+              for (let item of round) gameState.usedItems.add(item)
 
-            for (const item of game.selectionHistory ?? [])
+            for (let item of game.selectionHistory ?? [])
               gameState.usedItems.add(item)
 
-            const chain = document.querySelector(".selection-chain")
+            let chain = document.querySelector(".selection-chain")
             let html = ""
 
             // Show current round if there are selections
@@ -967,7 +966,7 @@
               html += `<div class="selection-round current">Current Round: `
               html += game.selectionHistory
                 .map((selection, idx) => {
-                  const type = idx % 2 === 0 ? "movie" : "actor"
+                  let type = idx % 2 === 0 ? "movie" : "actor"
                   return `<span class="selected-${type}">${selection}</span>`
                 })
                 .join(" → ")
@@ -982,7 +981,7 @@
                 }: `
                 html += round
                   .map((selection, idx) => {
-                    const type = idx % 2 === 0 ? "movie" : "actor"
+                    let type = idx % 2 === 0 ? "movie" : "actor"
                     return `<span class="${type}-selection">${selection}</span>`
                   })
                   .join(" → ")
@@ -1016,17 +1015,17 @@
           // Update creator controls
           if (gameState.isCreator) {
             creatorControls.classList.remove("hidden")
-            const requestsDiv = document.getElementById("join-requests")
+            let requestsDiv = document.getElementById("join-requests")
             requestsDiv.innerHTML = ""
 
             // Make sure joinRequests exists and is an object
             if (game.joinRequests && typeof game.joinRequests === "object") {
-              const requests = Object.entries(game.joinRequests)
+              let requests = Object.entries(game.joinRequests)
               document
                 .getElementById("no-pending-players")
                 .classList.toggle("hidden", requests.length > 0)
               requests.forEach(([name, request]) => {
-                const requestList = document.createElement("ul")
+                let requestList = document.createElement("ul")
                 requestList.className = "join-request"
                 requestList.innerHTML = `
                   <li>
@@ -1051,7 +1050,7 @@
             }
 
             // Update start button - enable only if there are 2 or more players
-            const startButton = document.getElementById("start-game-btn")
+            let startButton = document.getElementById("start-game-btn")
             startButton.disabled = game.players.length < 2
           } else {
             creatorControls.classList.add("hidden")
