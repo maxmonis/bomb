@@ -369,12 +369,10 @@
 
           ws.onmessage = (event) => {
             const message = JSON.parse(event.data)
-            console.log("Received message:", message) // Add logging
             handleWebSocketMessage(message)
           }
 
           ws.onclose = (event) => {
-            console.log("WebSocket closed with code:", event.code)
             handleReconnection()
           }
         } catch (error) {
@@ -464,7 +462,6 @@
         ) {
           gameState.reconnectAttempts++
           const delay = Math.min(1000 * gameState.reconnectAttempts, 5000) // Max 5 second delay
-          console.log(`Attempting to reconnect in ${delay / 1000} seconds...`)
 
           setTimeout(() => {
             if (gameState.id) {

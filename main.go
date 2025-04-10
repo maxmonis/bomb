@@ -664,7 +664,6 @@ func handleGetGames(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleJoinGame(w http.ResponseWriter, r *http.Request) {
-    log.Println("Received join-game request")
     if r.Method != http.MethodPost {
         log.Printf("Invalid method: %s", r.Method)
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -681,8 +680,6 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
-
-    log.Printf("Join request decoded: gameID=%s, name=%s", req.GameID, req.Name)
 
     if req.GameID == "" || req.Name == "" {
         log.Println("Missing required fields")
@@ -986,8 +983,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    log.Printf("Received WebSocket message: %+v", msg)
-
     if msg.GameID == "" {
         lobbyMutex.Lock()
         lobbyConnections[conn] = true
@@ -1009,7 +1004,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    log.Printf("Attempting to acquire game mutex in handleWebSocket for game %s", msg.GameID)
     game.Mu.Lock()
     
     var player *Player
@@ -1053,7 +1047,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
     }
 
     game.Mu.Unlock()
-    log.Printf("Released game mutex in handleWebSocket")
 
     // Broadcast state after releasing the mutex
     broadcastGameState(game)
