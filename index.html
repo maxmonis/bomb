@@ -799,13 +799,14 @@
         gameState.isCreator = game.creatorId === gameState.playerName
 
         // Check if current user is in a pending state
-        let isPending =
+        let isPending = Boolean(
           !gameState.isCreator &&
-          game.joinRequests &&
-          game.joinRequests[gameState.playerName] &&
-          !game.players.some((p) => p.name === gameState.playerName)
+            game.joinRequests &&
+            game.joinRequests[gameState.playerName] &&
+            !game.players.some((p) => p.name === gameState.playerName)
+        )
 
-        // Hide players heading when pending
+        // Hide players when pending
         document.querySelector(".players").classList.toggle("hidden", isPending)
 
         // Show "waiting for start" message when admitted but game not started
