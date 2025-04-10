@@ -186,19 +186,18 @@
       <h1 id="site-name">BOMB</h1>
 
       <div id="lobby" class="hidden">
-        <h2>Game Lobby</h2>
         <div id="available-games">
-          <h3>Available Games</h3>
+          <h2>Available Games</h2>
           <ul id="games-list"></ul>
           <small id="no-games">No games available</small>
         </div>
         <div id="create-game">
-          <h3>Create New Game</h3>
+          <h2>Create New Game</h2>
           <input type="text" id="creator-name" placeholder="Enter your name" />
           <button id="create-game-btn">Create Game</button>
         </div>
         <div id="join-game" class="hidden">
-          <h3>Join Game</h3>
+          <h2>Join Game</h2>
           <p>Game ID: <span id="join-game-id"></span></p>
           <input type="text" id="player-name" placeholder="Enter your name" />
           <textarea
@@ -219,10 +218,10 @@
         <div id="pending-message" class="hidden">
           <p>Waiting for the creator to admit you to the game...</p>
         </div>
-        <h3>Players:</h3>
+        <h2>Players:</h2>
         <ul id="players-list"></ul>
         <div id="creator-controls" class="hidden">
-          <h3>Join Requests:</h3>
+          <h2>Join Requests:</h2>
           <div id="join-requests"></div>
           <button id="start-game-btn" disabled>Start Game</button>
         </div>
@@ -309,6 +308,7 @@
 
       document.getElementById("cancel-join").addEventListener("click", () => {
         document.getElementById("join-game").classList.add("hidden")
+        document.getElementById("available-games").classList.remove("hidden")
         document.getElementById("create-game").classList.remove("hidden")
       })
 
@@ -732,6 +732,7 @@
             joinGameSection.classList.remove("hidden")
             document.getElementById("join-game-id").textContent = game.id
             document.getElementById("player-name").focus()
+            document.getElementById("available-games").classList.add("hidden")
             document.getElementById("create-game").classList.add("hidden")
             // Clear any previous values
             document.getElementById("player-name").value = ""
