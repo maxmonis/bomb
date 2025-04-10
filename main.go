@@ -392,27 +392,36 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     case "challenge":
         game.Mu.Lock()
         if game.RoundStarted && game.ChallengeState == nil {
-            // Find the previous player
-            previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
+            // Find the previous non-eliminated player
+            previousPlayerIndex := game.CurrentPlayer
+            for i := 0; i < len(game.Players); i++ {
+                previousPlayerIndex = (previousPlayerIndex - 1 + len(game.Players)) % len(game.Players)
+                if !game.Players[previousPlayerIndex].IsEliminated {
+                    break
+                }
+            }
             previousPlayer := game.Players[previousPlayerIndex]
             
-            // Set up challenge state
-            game.ChallengeState = &ChallengeState{
-                ChallengerName: player.Name,
-                ChallengedName: previousPlayer.Name,
-                ExpectedCategory: game.LastCategory, // The category they need to validate
+            // Only proceed with challenge if we found a valid previous player that isn't eliminated
+            if !previousPlayer.IsEliminated {
+                // Set up challenge state
+                game.ChallengeState = &ChallengeState{
+                    ChallengerName: player.Name,
+                    ChallengedName: previousPlayer.Name,
+                    ExpectedCategory: game.LastCategory,
+                }
+                
+                // Give control back to the challenged player
+                game.CurrentPlayer = previousPlayerIndex
+                game.TimeLeft = 30 // Reset timer for challenged player
+                
+                game.Mu.Unlock()
+                broadcastGameState(game)
+                startTimer(game) // Start timer for challenged player
+                return
             }
-            
-            // Give control back to the challenged player
-            game.CurrentPlayer = previousPlayerIndex
-            game.TimeLeft = 30 // Reset timer for challenged player
-            
-            game.Mu.Unlock()
-            broadcastGameState(game)
-            startTimer(game) // Start timer for challenged player
-        } else {
-            game.Mu.Unlock()
         }
+        game.Mu.Unlock()
 
     case "give_up":
         game.Mu.Lock()
