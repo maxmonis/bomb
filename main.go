@@ -337,17 +337,112 @@ func handleGameEnded(game *Game, message string) {
 
 func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     switch msg.Type {
-    case "time_expired":
-        game.Mu.Lock()
-        // Only handle time expiry if it's from the current player
-        if game.Players[game.CurrentPlayer].Name == player.Name {
-            // Call handleTimeExpiry directly to ensure consistent behavior
-            game.Mu.Unlock()
-            handleTimeExpiry(game)
+    case "admit_player":
+        var content struct {
+            PlayerName string `json:"playerName"`
+        }
+        if err := json.Unmarshal(msg.Content, &content); err != nil {
+            log.Printf("Error unmarshaling admit player: %v", err)
             return
         }
-        game.Mu.Unlock()
+        
+        game.Mu.Lock()
+        isCreator := player.Name == game.CreatorID
+        inProgress := game.InProgress
+        _, requestExists := game.JoinRequests[content.PlayerName]
+        
+        if isCreator && !inProgress && requestExists {
+            // Get the pending connection
+            pendingConn := game.PendingConns[content.PlayerName]
+            
+            // Add the player to the game
+            game.Players = append(game.Players, &Player{
+                Name: content.PlayerName,
+                IsActive: true,
+                Conn: pendingConn,
+            })
+            
+            // Clean up
+            delete(game.PendingConns, content.PlayerName)
+            delete(game.JoinRequests, content.PlayerName)
+            
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            
+            // Notify the admitted player
+            if pendingConn != nil {
+                pendingConn.WriteJSON(map[string]string{
+                    "type": "join_accepted",
+                    "message": "You have been admitted to the game",
+                })
+            }
+        } else {
+            game.Mu.Unlock()
+        }
 
+    case "challenge":
+        game.Mu.Lock()
+        if game.RoundStarted && game.ChallengeState == nil {
+            // Find the previous player
+            previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
+            previousPlayer := game.Players[previousPlayerIndex]
+            
+            // Set up challenge state
+            game.ChallengeState = &ChallengeState{
+                ChallengerName: player.Name,
+                ChallengedName: previousPlayer.Name,
+                ExpectedCategory: game.LastCategory, // The category they need to validate
+            }
+            
+            // Give control back to the challenged player
+            game.CurrentPlayer = previousPlayerIndex
+            game.TimeLeft = 30 // Reset timer for challenged player
+            
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            startTimer(game) // Start timer for challenged player
+        } else {
+            game.Mu.Unlock()
+        }
+
+    case "give_up":
+        game.Mu.Lock()
+        if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
+            // Add letter to challenged player
+            for i, p := range game.Players {
+                if p.Name == player.Name {
+                    p.Letters++
+                    if p.Letters >= 4 {
+                        // Remove player if they spell BOMB
+                        game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                        
+                        // If only one player remains, they win
+                        if len(game.Players) == 1 {
+                            game.Mu.Unlock()
+                            handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
+                            return
+                        }
+                    }
+                    break
+                }
+            }
+            
+            // Reset game state for next round
+            game.ChallengeState = nil
+            game.LastSelection = ""
+            game.LastCategory = ""
+            game.RoundStarted = false
+            game.TimeLeft = 30
+            // Move to next player after the challenged player
+            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+            
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            startTimer(game)
+        } else {
+            game.Mu.Unlock()
+        }
+    
     case "make_selection":
         var content struct {
             Selection string `json:"selection"`
@@ -462,124 +557,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             game.Mu.Unlock()
         }
 
-    case "start_game":
-        game.Mu.Lock()
-        if player.Name == game.CreatorID && !game.InProgress && len(game.Players) >= 2 {
-            game.InProgress = true
-            game.CurrentPlayer = 0  // Start with the first player
-            game.Mu.Unlock()
-            broadcastGameState(game)
-            startTimer(game) // Start timer for first player
-        } else {
-            game.Mu.Unlock()
-        }
-
-    case "challenge":
-        game.Mu.Lock()
-        if game.RoundStarted && game.ChallengeState == nil {
-            // Find the previous player
-            previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
-            previousPlayer := game.Players[previousPlayerIndex]
-            
-            // Set up challenge state
-            game.ChallengeState = &ChallengeState{
-                ChallengerName: player.Name,
-                ChallengedName: previousPlayer.Name,
-                ExpectedCategory: game.LastCategory, // The category they need to validate
-            }
-            
-            // Give control back to the challenged player
-            game.CurrentPlayer = previousPlayerIndex
-            game.TimeLeft = 30 // Reset timer for challenged player
-            
-            game.Mu.Unlock()
-            broadcastGameState(game)
-            startTimer(game) // Start timer for challenged player
-        } else {
-            game.Mu.Unlock()
-        }
-
-    case "give_up":
-        game.Mu.Lock()
-        if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
-            // Add letter to challenged player
-            for i, p := range game.Players {
-                if p.Name == player.Name {
-                    p.Letters++
-                    if p.Letters >= 4 {
-                        // Remove player if they spell BOMB
-                        game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                        
-                        // If only one player remains, they win
-                        if len(game.Players) == 1 {
-                            game.Mu.Unlock()
-                            handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
-                            return
-                        }
-                    }
-                    break
-                }
-            }
-            
-            // Reset game state for next round
-            game.ChallengeState = nil
-            game.LastSelection = ""
-            game.LastCategory = ""
-            game.RoundStarted = false
-            game.TimeLeft = 30
-            // Move to next player after the challenged player
-            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
-            
-            game.Mu.Unlock()
-            broadcastGameState(game)
-            startTimer(game)
-        } else {
-            game.Mu.Unlock()
-        }
-
-    case "admit_player":
-        var content struct {
-            PlayerName string `json:"playerName"`
-        }
-        if err := json.Unmarshal(msg.Content, &content); err != nil {
-            log.Printf("Error unmarshaling admit player: %v", err)
-            return
-        }
-        
-        game.Mu.Lock()
-        isCreator := player.Name == game.CreatorID
-        inProgress := game.InProgress
-        _, requestExists := game.JoinRequests[content.PlayerName]
-        
-        if isCreator && !inProgress && requestExists {
-            // Get the pending connection
-            pendingConn := game.PendingConns[content.PlayerName]
-            
-            // Add the player to the game
-            game.Players = append(game.Players, &Player{
-                Name: content.PlayerName,
-                IsActive: true,
-                Conn: pendingConn,
-            })
-            
-            // Clean up
-            delete(game.PendingConns, content.PlayerName)
-            delete(game.JoinRequests, content.PlayerName)
-            
-            game.Mu.Unlock()
-            broadcastGameState(game)
-            
-            // Notify the admitted player
-            if pendingConn != nil {
-                pendingConn.WriteJSON(map[string]string{
-                    "type": "join_accepted",
-                    "message": "You have been admitted to the game",
-                })
-            }
-        } else {
-            game.Mu.Unlock()
-        }
-
+    
     case "reject_player":
         var content struct {
             PlayerName string `json:"playerName"`
@@ -612,6 +590,18 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         }
         game.Mu.Unlock()
 
+    case "start_game":
+        game.Mu.Lock()
+        if player.Name == game.CreatorID && !game.InProgress && len(game.Players) >= 2 {
+            game.InProgress = true
+            game.CurrentPlayer = 0  // Start with the first player
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            startTimer(game) // Start timer for first player
+        } else {
+            game.Mu.Unlock()
+        }
+
     case "start_turn":
         game.Mu.Lock()
         if game.Players[game.CurrentPlayer].Name == player.Name {
@@ -620,6 +610,17 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         } else {
             game.Mu.Unlock()
         }
+    
+    case "time_expired":
+        game.Mu.Lock()
+        // Only handle time expiry if it's from the current player
+        if game.Players[game.CurrentPlayer].Name == player.Name {
+            // Call handleTimeExpiry directly to ensure consistent behavior
+            game.Mu.Unlock()
+            handleTimeExpiry(game)
+            return
+        }
+        game.Mu.Unlock()
     }
 
     // Check for game end
