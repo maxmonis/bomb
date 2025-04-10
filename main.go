@@ -314,18 +314,29 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGameEnded(game *Game, message string) {
-    // Notify all players
-    for _, p := range game.Players {
-        p.Conn.WriteJSON(map[string]string{
-            "type": "game_ended",
-            "message": message,
-        })
-    }
+    game.Mu.Lock()
+    // Make a copy of players to notify while holding the lock
+    players := make([]*Player, len(game.Players))
+    copy(players, game.Players)
     
-    // Remove game from global state
+    // Clean up game state
+    gameID := game.ID
+    game.Mu.Unlock()
+    
+    // Remove game from global state before notifications
     gamesMutex.Lock()
-    delete(games, game.ID)
+    delete(games, gameID)
     gamesMutex.Unlock()
+    
+    // Notify all players after releasing locks
+    for _, p := range players {
+        if p.Conn != nil {
+            p.Conn.WriteJSON(map[string]string{
+                "type": "game_ended",
+                "message": message,
+            })
+        }
+    }
     
     // Broadcast updated game list to lobby
     broadcastAvailableGames()
@@ -628,22 +639,11 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     // Check for game end
     game.Mu.Lock()
     if len(game.Players) == 1 {
-        // Get winner under lock
+        // Get winner info while holding lock
         winner := game.Players[0].Name
         game.Mu.Unlock()
-        
-        // Notify winner without holding the lock
-        for _, p := range game.Players {
-            p.Conn.WriteJSON(map[string]string{
-                "type": "game_won",
-                "winner": winner,
-            })
-        }
-        
-        // Remove game from global state
-        gamesMutex.Lock()
-        delete(games, game.ID)
-        gamesMutex.Unlock()
+        // End game and notify players
+        handleGameEnded(game, fmt.Sprintf("Game over! Winner: %s", winner))
     } else {
         game.Mu.Unlock()
     }
@@ -919,6 +919,17 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 func handleTimeExpiry(game *Game) {
     game.Mu.Lock()
 
+    // Validate current state before doing anything
+    if len(game.Players) <= 1 || game.CurrentPlayer >= len(game.Players) {
+        game.Mu.Unlock()
+        return
+    }
+
+    var eliminated *Player
+    var nextPlayer int
+    var isGameOver bool
+    var winner string
+
     // Add letter to current player and handle potential elimination
     for i, p := range game.Players {
         if i == game.CurrentPlayer {
@@ -929,35 +940,70 @@ func handleTimeExpiry(game *Game) {
             }
             game.SelectionHistory = make([]string, 0)
             game.IsNewRound = true
-            // If player has spelled BOMB, remove them
+
+            // If player has spelled BOMB, mark them for elimination
             if p.Letters >= 4 {
-                game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                i-- // Adjust index after removal
+                eliminated = p
             }
             break
         }
     }
-    
-    // Check if game is over
-    if len(game.Players) == 1 {
-        handleGameEnded(game, "Game over! Winner: "+game.Players[0].Name)
-        return
+
+    // Handle elimination if needed
+    if eliminated != nil {
+        // Send elimination message before modifying game state
+        if eliminated.Conn != nil {
+            eliminated.Conn.WriteJSON(map[string]string{
+                "type": "player_eliminated",
+                "message": "You've been eliminated, better luck next time!",
+            })
+        }
+
+        // Remove eliminated player
+        newPlayers := make([]*Player, 0, len(game.Players)-1)
+        for _, p := range game.Players {
+            if p != eliminated {
+                newPlayers = append(newPlayers, p)
+            }
+        }
+        game.Players = newPlayers
+
+        // Check if game is over
+        if len(game.Players) == 1 {
+            isGameOver = true
+            winner = game.Players[0].Name
+            nextPlayer = 0
+        } else {
+            // Calculate next player index after elimination
+            nextPlayer = game.CurrentPlayer % len(game.Players)
+        }
+    } else {
+        // Normal turn end - move to next player
+        nextPlayer = (game.CurrentPlayer + 1) % len(game.Players)
     }
 
-    // Reset game state for next turn
-    game.LastSelection = ""
-    game.LastCategory = ""
-    game.RoundStarted = false
-    game.Timer = nil
-    game.TimeLeft = 30  // Reset timer for next player
-    game.ChallengeState = nil
+    // Update game state for next turn if game is not over
+    if !isGameOver {
+        game.LastSelection = ""
+        game.LastCategory = ""
+        game.RoundStarted = false
+        if game.Timer != nil {
+            game.Timer.Stop()
+        }
+        game.Timer = nil
+        game.TimeLeft = 30
+        game.ChallengeState = nil
+        game.CurrentPlayer = nextPlayer
+    }
 
-    // Move to next player, handling wrap-around
-    game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
-
-    // Broadcast updated state
     game.Mu.Unlock()
-    broadcastGameState(game)
+
+    // Handle game end or broadcast state
+    if isGameOver {
+        handleGameEnded(game, fmt.Sprintf("Game over! Winner: %s", winner))
+    } else {
+        broadcastGameState(game)
+    }
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
