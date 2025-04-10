@@ -187,18 +187,201 @@
     </div>
 
     <script>
+      // -------------------- Global variables --------------------
+
       let ws
       let gameState = {
         id: null,
-        playerName: null,
         isCreator: false,
-        usedItems: new Set(),
-        shouldReconnect: true,
-        reconnectAttempts: 0,
         maxReconnectAttempts: 5,
+        playerName: null,
+        reconnectAttempts: 0,
+        shouldReconnect: true,
+        timeLeft: 30,
         timerInterval: null,
         turnStartTime: null,
-        timeLeft: 30,
+        usedItems: new Set(),
+      }
+
+      // -------------------- Event listeners --------------------
+
+      window.addEventListener("load", onLoad)
+
+      document
+        .getElementById("create-game-btn")
+        .addEventListener("click", createGame)
+
+      document
+        .getElementById("join-game-btn")
+        .addEventListener("click", joinGame)
+
+      document
+        .getElementById("start-game-btn")
+        .addEventListener("click", startGame)
+
+      document.getElementById("search-button").addEventListener("click", search)
+
+      document.getElementById("challenge").addEventListener("click", challenge)
+
+      document.getElementById("give-up").addEventListener("click", giveUp)
+
+      // -------------------- Functions --------------------
+
+      function challenge() {
+        stopLocalCountdown()
+        ws.send(JSON.stringify({ type: "challenge" }))
+      }
+
+      function giveUp() {
+        stopLocalCountdown()
+        ws.send(JSON.stringify({ type: "give_up" }))
+      }
+
+      function startGame() {
+        ws.send(JSON.stringify({ type: "start_game" }))
+      }
+
+      async function createGame() {
+        const creatorName = document.getElementById("creator-name").value.trim()
+        if (!creatorName) {
+          alert("Please enter your name")
+          return
+        }
+
+        const response = await fetch("/create-game", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ creatorName }),
+        })
+
+        const data = await response.json()
+        gameState.id = data.gameId
+        gameState.isCreator = true
+        gameState.playerName = creatorName
+
+        // Save to localStorage
+        localStorage.setItem("gameId", gameState.id)
+        localStorage.setItem("playerName", creatorName)
+
+        document.getElementById("game-id-display").textContent = gameState.id
+        document.getElementById("lobby").classList.add("hidden")
+        document.getElementById("waiting-room").classList.remove("hidden")
+
+        connectToGame(gameState.id, creatorName)
+      }
+
+      async function joinGame() {
+        const gameId = document.getElementById("game-id").value.trim()
+        const playerName = document.getElementById("player-name").value.trim()
+        const message = document.getElementById("join-message").value.trim()
+
+        if (!gameId || !playerName) {
+          alert("Please enter both game ID and your name")
+          return
+        }
+
+        try {
+          const response = await fetch("/join-game", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ gameId, name: playerName, message }),
+          })
+
+          if (!response.ok) {
+            const error = await response.text()
+            throw new Error(error)
+          }
+
+          // Save to localStorage
+          localStorage.setItem("gameId", gameId)
+          localStorage.setItem("playerName", playerName)
+
+          // Show waiting room and hide lobby
+          document.getElementById("lobby").classList.add("hidden")
+          document.getElementById("waiting-room").classList.remove("hidden")
+          document.getElementById("game-id-display").textContent = gameId
+
+          // Connect to WebSocket after join request is accepted
+          connectToGame(gameId, playerName)
+        } catch (error) {
+          alert(error.message)
+        }
+      }
+
+      async function search() {
+        const query = document.getElementById("search-bar").value.trim()
+        if (!query) return
+
+        const category = document.querySelector(
+          'input[name="category"]:checked'
+        )?.value
+
+        try {
+          const params = new URLSearchParams({
+            query,
+            category,
+          })
+
+          // Add lastSelection if it exists
+          if (gameState.lastSelection) {
+            params.append("lastSelection", gameState.lastSelection)
+          }
+
+          const response = await fetch(`/search?${params}`)
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+
+          const results = await response.json()
+
+          const resultsList = document.getElementById("search-results")
+          resultsList.innerHTML = ""
+
+          if (!results || results.length === 0) {
+            resultsList.innerHTML = "<li>No results found</li>"
+            return
+          }
+
+          results.forEach((result) => {
+            const li = document.createElement("li")
+            li.textContent = result
+            const selectBtn = document.createElement("button")
+            selectBtn.textContent = "Select"
+            // Disable the button if the item has been used before
+            selectBtn.disabled = gameState.usedItems.has(result)
+            selectBtn.onclick = () => {
+              makeSelection(result, category)
+              // Clear search results after selection
+              resultsList.innerHTML = ""
+              document.getElementById("search-bar").value = ""
+              // Update game state with the selection
+              gameState.lastSelection = result
+              gameState.lastCategory = category
+              // Start timer for next player
+              ws.send(JSON.stringify({ type: "start_turn" }))
+            }
+            li.appendChild(selectBtn)
+            resultsList.appendChild(li)
+          })
+        } catch (error) {
+          console.error("Search error:", error)
+          const resultsList = document.getElementById("search-results")
+          resultsList.innerHTML =
+            "<li>Failed to fetch results. Please try again.</li>"
+        }
+      }
+
+      // Check for existing game in localStorage on page load
+      function onLoad() {
+        connectToLobby()
+        const savedGameId = localStorage.getItem("gameId")
+        if (savedGameId) {
+          reconnectToGame()
+        } else {
+          document.getElementById("lobby").classList.remove("hidden")
+          connectToGame(null, null) // Connect without game ID for lobby updates
+        }
       }
 
       // Function to start local countdown
@@ -250,16 +433,6 @@
           gameState.turnStartTime = null
         }
       }
-
-      // Check for existing game in localStorage on page load
-      window.addEventListener("load", () => {
-        const savedGameId = localStorage.getItem("gameId")
-        if (savedGameId) {
-          reconnectToGame()
-        } else {
-          document.getElementById("lobby").classList.remove("hidden")
-        }
-      })
 
       function connectToGame(gameId, playerName, isReconnect = false) {
         try {
@@ -380,7 +553,6 @@
       }
 
       function updateGameState(game) {
-        console.log("Game state update:", game)
         const statusDiv = document.getElementById("player-status")
         const waitingRoom = document.getElementById("waiting-room")
         const gameArea = document.getElementById("game-area")
@@ -699,147 +871,6 @@
         )
       }
 
-      // Event Listeners
-      document
-        .getElementById("create-game-btn")
-        .addEventListener("click", async () => {
-          const creatorName = document
-            .getElementById("creator-name")
-            .value.trim()
-          if (!creatorName) {
-            alert("Please enter your name")
-            return
-          }
-
-          const response = await fetch("/create-game", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ creatorName }),
-          })
-
-          const data = await response.json()
-          gameState.id = data.gameId
-          gameState.isCreator = true
-          gameState.playerName = creatorName
-
-          // Save to localStorage
-          localStorage.setItem("gameId", gameState.id)
-          localStorage.setItem("playerName", creatorName)
-
-          document.getElementById("game-id-display").textContent = gameState.id
-          document.getElementById("lobby").classList.add("hidden")
-          document.getElementById("waiting-room").classList.remove("hidden")
-
-          connectToGame(gameState.id, creatorName)
-        })
-
-      document
-        .getElementById("join-game-btn")
-        .addEventListener("click", async () => {
-          const gameId = document.getElementById("game-id").value.trim()
-          const playerName = document.getElementById("player-name").value.trim()
-          const message = document.getElementById("join-message").value.trim()
-
-          if (!gameId || !playerName) {
-            alert("Please enter both game ID and your name")
-            return
-          }
-
-          try {
-            const response = await fetch("/join-game", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ gameId, name: playerName, message }),
-            })
-
-            if (!response.ok) {
-              const error = await response.text()
-              throw new Error(error)
-            }
-
-            // Save to localStorage
-            localStorage.setItem("gameId", gameId)
-            localStorage.setItem("playerName", playerName)
-
-            // Show waiting room and hide lobby
-            document.getElementById("lobby").classList.add("hidden")
-            document.getElementById("waiting-room").classList.remove("hidden")
-            document.getElementById("game-id-display").textContent = gameId
-
-            // Connect to WebSocket after join request is accepted
-            connectToGame(gameId, playerName)
-          } catch (error) {
-            alert(error.message)
-          }
-        })
-
-      // Game event handlers
-      document
-        .getElementById("search-button")
-        .addEventListener("click", async () => {
-          const query = document.getElementById("search-bar").value.trim()
-          if (!query) return
-
-          const category = document.querySelector(
-            'input[name="category"]:checked'
-          )?.value
-
-          try {
-            const params = new URLSearchParams({
-              query,
-              category,
-            })
-
-            // Add lastSelection if it exists
-            if (gameState.lastSelection) {
-              params.append("lastSelection", gameState.lastSelection)
-            }
-
-            const response = await fetch(`/search?${params}`)
-
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`)
-            }
-
-            const results = await response.json()
-
-            const resultsList = document.getElementById("search-results")
-            resultsList.innerHTML = ""
-
-            if (!results || results.length === 0) {
-              resultsList.innerHTML = "<li>No results found</li>"
-              return
-            }
-
-            results.forEach((result) => {
-              const li = document.createElement("li")
-              li.textContent = result
-              const selectBtn = document.createElement("button")
-              selectBtn.textContent = "Select"
-              // Disable the button if the item has been used before
-              selectBtn.disabled = gameState.usedItems.has(result)
-              selectBtn.onclick = () => {
-                makeSelection(result, category)
-                // Clear search results after selection
-                resultsList.innerHTML = ""
-                document.getElementById("search-bar").value = ""
-                // Update game state with the selection
-                gameState.lastSelection = result
-                gameState.lastCategory = category
-                // Start timer for next player
-                ws.send(JSON.stringify({ type: "start_turn" }))
-              }
-              li.appendChild(selectBtn)
-              resultsList.appendChild(li)
-            })
-          } catch (error) {
-            console.error("Search error:", error)
-            const resultsList = document.getElementById("search-results")
-            resultsList.innerHTML =
-              "<li>Failed to fetch results. Please try again.</li>"
-          }
-        })
-
       function makeSelection(selection, category) {
         // Stop countdown when making a selection
         stopLocalCountdown()
@@ -869,26 +900,6 @@
         location.reload()
       }
 
-      // Challenge and Give Up functionality remains similar to before,
-      // but now sends WebSocket messages instead of handling locally
-      document.getElementById("challenge").addEventListener("click", () => {
-        // Stop countdown when challenging
-        stopLocalCountdown()
-        ws.send(JSON.stringify({ type: "challenge" }))
-      })
-
-      document.getElementById("give-up").addEventListener("click", () => {
-        // Stop countdown when giving up
-        stopLocalCountdown()
-        ws.send(JSON.stringify({ type: "give_up" }))
-      })
-
-      document
-        .getElementById("start-game-btn")
-        .addEventListener("click", () => {
-          ws.send(JSON.stringify({ type: "start_game" }))
-        })
-
       function updateAvailableGames(games) {
         const gamesList = document.getElementById("games-list")
         gamesList.innerHTML = ""
@@ -904,11 +915,6 @@
           li.appendChild(joinBtn)
           gamesList.appendChild(li)
         })
-      }
-
-      // Connect to WebSocket for lobby updates when page loads
-      if (!localStorage.getItem("gameId")) {
-        connectToGame(null, null) // Connect without game ID for lobby updates
       }
 
       function connectToLobby() {
@@ -948,10 +954,6 @@
           gamesList.appendChild(li)
         })
       }
-
-      // Initialize WebSocket connection when page loads
-      window.addEventListener("load", connectToLobby)
-      // Remove the polling interval since we're using WebSocket now
     </script>
   </body>
 </html>
