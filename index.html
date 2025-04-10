@@ -201,11 +201,22 @@
         timerInterval: null,
         turnStartTime: null,
         usedItems: new Set(),
+        inProgress: false,
       }
 
       // -------------------- Event listeners --------------------
 
       window.addEventListener("load", onLoad)
+
+      // Add warning when trying to leave or reload during a game
+      window.addEventListener("beforeunload", (e) => {
+        if (gameState.inProgress) {
+          e.preventDefault()
+          e.returnValue =
+            "Leaving or reloading will end the game for all players. Are you sure?"
+          return e.returnValue
+        }
+      })
 
       document
         .getElementById("create-game-btn")
@@ -394,6 +405,7 @@
               document.getElementById("lobby").classList.remove("hidden")
               document.getElementById("waiting-room").classList.add("hidden")
               document.getElementById("game-area").classList.add("hidden")
+              alert("Game not found. Returning to lobby.")
             } else if (message.message === "Your join request was rejected") {
               // Return to lobby if rejected
               localStorage.removeItem("gameId")
@@ -407,11 +419,14 @@
           case "game_ended":
             // Stop countdown when game ends
             stopLocalCountdown()
+            gameState.inProgress = false
+            alert(message.message)
             handleGameEnded(message)
             break
           case "game_state":
             // Stop any existing countdown before updating game state
             stopLocalCountdown()
+            gameState.inProgress = message.game.inProgress
             updateGameState(message.game)
             break
           case "join_accepted":

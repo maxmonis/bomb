@@ -755,20 +755,25 @@ func handlePlayerDisconnect(game *Game, player *Player) {
 		}
 	}
 
-	// If creator disconnects, end the game
-	if player.Name == game.CreatorID {
+	// If creator disconnects or game is in progress, end the game
+	if player.Name == game.CreatorID || game.InProgress {
 		gamesMutex.Lock()
 		delete(games, game.ID)
 		gamesMutex.Unlock()
 		
-		 // Broadcast updated game list to lobby
+		// Broadcast updated game list to lobby
 		broadcastAvailableGames()
 		
 		// Notify remaining players
+		message := "Game creator disconnected"
+		if game.InProgress && player.Name != game.CreatorID {
+			message = fmt.Sprintf("Player %s disconnected. Game ended.", player.Name)
+		}
+		
 		for _, p := range game.Players {
 			p.Conn.WriteJSON(map[string]string{
 				"type": "game_ended",
-				"message": "Game creator disconnected",
+				"message": message,
 			})
 		}
 		return
