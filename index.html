@@ -84,6 +84,10 @@
         display: grid;
         gap: 0.25rem;
       }
+      .join-buttons {
+        display: flex;
+        gap: 0.5rem;
+      }
       #join-game {
         display: flex;
         flex-direction: column;
@@ -193,16 +197,19 @@
           <input type="text" id="creator-name" placeholder="Enter your name" />
           <button id="create-game-btn">Create Game</button>
         </div>
-        <div id="join-game">
+        <div id="join-game" class="hidden">
           <h3>Join Game</h3>
-          <input type="text" id="game-id" placeholder="Enter game ID" />
+          <p>Game ID: <span id="join-game-id"></span></p>
           <input type="text" id="player-name" placeholder="Enter your name" />
           <textarea
             type="text"
             id="join-message"
             placeholder="Message to creator (optional)"
           ></textarea>
-          <button id="join-game-btn">Join Game</button>
+          <div class="join-buttons">
+            <button id="join-game-btn">Join Game</button>
+            <button id="cancel-join" class="red">Cancel</button>
+          </div>
         </div>
       </div>
 
@@ -299,6 +306,11 @@
       document.getElementById("challenge").addEventListener("click", challenge)
 
       document.getElementById("give-up").addEventListener("click", giveUp)
+
+      document.getElementById("cancel-join").addEventListener("click", () => {
+        document.getElementById("join-game").classList.add("hidden")
+        document.getElementById("create-game").classList.remove("hidden")
+      })
 
       // -------------------- Functions --------------------
 
@@ -502,12 +514,12 @@
       }
 
       async function joinGame() {
-        const gameId = document.getElementById("game-id").value.trim()
+        const gameId = document.getElementById("join-game-id").textContent
         const playerName = document.getElementById("player-name").value.trim()
         const message = document.getElementById("join-message").value.trim()
 
         if (!gameId || !playerName) {
-          alert("Please enter both game ID and your name")
+          alert("Please enter your name")
           return
         }
 
@@ -706,17 +718,24 @@
 
       function updateGamesList(games) {
         const gamesList = document.getElementById("games-list")
-        if (games.length) {
-          document.getElementById("no-games").classList.add("hidden")
-        }
+        const joinGameSection = document.getElementById("join-game")
+        document
+          .getElementById("no-games")
+          .classList.toggle("hidden", games.length > 0)
         gamesList.innerHTML = ""
         games.forEach((game) => {
           const li = document.createElement("li")
           const joinButton = document.createElement("button")
           joinButton.textContent = "Join Game"
           joinButton.onclick = () => {
-            document.getElementById("game-id").value = game.id
+            // Show join game form
+            joinGameSection.classList.remove("hidden")
+            document.getElementById("join-game-id").textContent = game.id
             document.getElementById("player-name").focus()
+            document.getElementById("create-game").classList.add("hidden")
+            // Clear any previous values
+            document.getElementById("player-name").value = ""
+            document.getElementById("join-message").value = ""
           }
           li.textContent = `${game.creatorId}'s game - ${game.id}`
           li.appendChild(joinButton)
