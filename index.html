@@ -75,13 +75,14 @@
       #countdown {
         font-size: 2rem;
       }
-      #create-game {
+      #create-game-form {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
       }
-      .game-area {
-        display: grid;
+      #game-area {
+        display: flex;
+        flex-direction: column;
         gap: 0.25rem;
       }
       #games-list li,
@@ -99,7 +100,7 @@
         display: flex;
         gap: 0.5rem;
       }
-      #join-game {
+      #join-game-form {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
@@ -165,6 +166,18 @@
         margin-block-end: 1rem;
         text-align: center;
       }
+      #search-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      #search-form input {
+        flex-grow: 1;
+        width: 12rem;
+      }
+      #search-form div {
+        display: flex;
+      }
       #search-results {
         display: grid;
         padding: 0.5rem 0.25rem;
@@ -213,12 +226,12 @@
           <ul id="games-list"></ul>
           <p id="no-games">No games available</p>
         </div>
-        <div id="create-game">
+        <form id="create-game-form">
           <h2>Create New Game</h2>
           <input type="text" id="creator-name" placeholder="Enter your name" />
-          <button id="create-game-btn">Create Game</button>
-        </div>
-        <div id="join-game" class="hidden">
+          <button>Create Game</button>
+        </form>
+        <form id="join-game-form" class="hidden">
           <h2>Join Game</h2>
           <p>Game ID: <span id="join-game-id"></span></p>
           <input type="text" id="player-name" placeholder="Enter your name" />
@@ -228,10 +241,10 @@
             placeholder="Message to creator (optional)"
           ></textarea>
           <div class="join-buttons">
-            <button id="join-game-btn">Join Game</button>
-            <button id="cancel-join" class="red">Cancel</button>
+            <button type="submit">Join Game</button>
+            <button id="cancel-join" class="red" type="button">Cancel</button>
           </div>
-        </div>
+        </form>
       </div>
 
       <div id="waiting-room" class="hidden">
@@ -272,10 +285,16 @@
           >
         </div>
         <p id="instruction-text"></p>
-        <input type="text" id="search-bar" />
-        <button id="search-button">Search</button>
-        <button id="challenge" class="red hidden">Challenge</button>
-        <button id="give-up" class="red hidden">Give Up</button>
+        <form id="search-form" class="hidden">
+          <input type="text" id="search-bar" />
+          <div>
+            <button type="submit">Search</button>
+            <button id="challenge" class="red hidden" type="button">
+              Challenge
+            </button>
+            <button id="give-up" class="red hidden">Give Up</button>
+          </div>
+        </form>
         <ul id="search-results"></ul>
         <div id="selection-history">
           <h3>Selection Chain</h3>
@@ -317,27 +336,27 @@
       })
 
       document
-        .getElementById("create-game-btn")
-        .addEventListener("click", createGame)
+        .getElementById("create-game-form")
+        .addEventListener("submit", createGame)
 
       document
-        .getElementById("join-game-btn")
-        .addEventListener("click", joinGame)
+        .getElementById("join-game-form")
+        .addEventListener("submit", joinGame)
 
       document
         .getElementById("start-game-btn")
         .addEventListener("click", startGame)
 
-      document.getElementById("search-button").addEventListener("click", search)
+      document.getElementById("search-form").addEventListener("submit", search)
 
       document.getElementById("challenge").addEventListener("click", challenge)
 
       document.getElementById("give-up").addEventListener("click", giveUp)
 
       document.getElementById("cancel-join").addEventListener("click", () => {
-        document.getElementById("join-game").classList.add("hidden")
+        document.getElementById("join-game-form").classList.add("hidden")
         document.getElementById("available-games").classList.remove("hidden")
-        document.getElementById("create-game").classList.remove("hidden")
+        document.getElementById("create-game-form").classList.remove("hidden")
       })
 
       // -------------------- Functions --------------------
@@ -411,7 +430,9 @@
         }
       }
 
-      async function createGame() {
+      async function createGame(e) {
+        e.preventDefault()
+
         let creatorName = document.getElementById("creator-name").value.trim()
         if (!creatorName) {
           alert("Please enter your name")
@@ -542,7 +563,9 @@
         }
       }
 
-      async function joinGame() {
+      async function joinGame(e) {
+        e.preventDefault()
+
         let gameId = document.getElementById("join-game-id").textContent
         let playerName = document.getElementById("player-name").value.trim()
         let message = document.getElementById("join-message").value.trim()
@@ -629,7 +652,9 @@
         }
       }
 
-      async function search() {
+      async function search(e) {
+        e.preventDefault()
+
         let query = document.getElementById("search-bar").value.trim()
         if (!query) return
 
@@ -727,10 +752,8 @@
               "Time's up!"
             // Hide all game controls immediately
             document.getElementById("category").classList.add("hidden")
-            document.getElementById("search-bar").classList.add("hidden")
-            document.getElementById("search-button").classList.add("hidden")
+            document.getElementById("search-form").classList.add("hidden")
             document.getElementById("search-results").innerHTML = ""
-            document.getElementById("challenge").classList.add("hidden")
             document.getElementById("give-up").classList.add("hidden")
           }
         }, 100) // Update more frequently for smoother display
@@ -748,7 +771,7 @@
       function updateGamesList(gameIds) {
         gameIds ??= []
         let gamesList = document.getElementById("games-list")
-        let joinGameSection = document.getElementById("join-game")
+        let joinGameSection = document.getElementById("join-game-form")
         document
           .getElementById("no-games")
           .classList.toggle("hidden", gameIds.length > 0)
@@ -763,7 +786,7 @@
             document.getElementById("join-game-id").textContent = gameId
             document.getElementById("player-name").focus()
             document.getElementById("available-games").classList.add("hidden")
-            document.getElementById("create-game").classList.add("hidden")
+            document.getElementById("create-game-form").classList.add("hidden")
             // Clear any previous values
             document.getElementById("player-name").value = ""
             document.getElementById("join-message").value = ""
@@ -782,8 +805,7 @@
         let creatorControls = document.getElementById("creator-controls")
         let pendingMessage = document.getElementById("waiting-for-admission")
         let searchWidgets = document.getElementById("category")
-        let searchBar = document.getElementById("search-bar")
-        let searchButton = document.getElementById("search-button")
+        let searchForm = document.getElementById("search-form")
         let searchResults = document.getElementById("search-results")
         let countdownElement = document.getElementById("countdown")
         let selectionHistory = document.getElementById("selection-history")
@@ -871,8 +893,7 @@
               countdownElement.textContent = "30"
               startLocalCountdown()
               searchWidgets.classList.remove("hidden")
-              searchBar.classList.remove("hidden")
-              searchButton.classList.remove("hidden")
+              searchForm.classList.remove("hidden")
               let lastSelection = game.lastSelection
               let lastCategory = game.lastCategory
               document.getElementById("instruction-text").textContent =
@@ -880,14 +901,13 @@
                   ? lastCategory === "movie"
                     ? `Name an actor from ${lastSelection}`
                     : `Name a movie starring ${lastSelection}`
-                  : "Your turn! Name any movie or actor to start"
+                  : "Name any movie or actor"
             } else if (game.timeLeft === 0) {
               // Time expired state
               stopLocalCountdown()
               countdownElement.textContent = "0"
               searchWidgets.classList.add("hidden")
-              searchBar.classList.add("hidden")
-              searchButton.classList.add("hidden")
+              searchForm.classList.add("hidden")
               searchResults.innerHTML = ""
               document.getElementById("instruction-text").textContent =
                 "Time's up!"
@@ -898,8 +918,7 @@
             // Not current player's turn
             stopLocalCountdown()
             searchWidgets.classList.add("hidden")
-            searchBar.classList.add("hidden")
-            searchButton.classList.add("hidden")
+            searchForm.classList.add("hidden")
             searchResults.innerHTML = ""
             document.getElementById(
               "instruction-text"
@@ -909,8 +928,7 @@
           // Show/hide search widgets based on whether it's the current player's turn
           if (isCurrentPlayer) {
             searchWidgets.classList.toggle("hidden", !!game.lastCategory)
-            searchBar.classList.remove("hidden")
-            searchButton.classList.remove("hidden")
+            searchForm.classList.remove("hidden")
 
             let lastSelection = game.lastSelection
             let lastCategory = game.lastCategory
@@ -919,7 +937,7 @@
                 ? lastCategory === "movie"
                   ? `Name an actor from ${lastSelection}`
                   : `Name a movie starring ${lastSelection}`
-                : "Your turn! Name any movie or actor to start"
+                : "Name any movie or actor"
 
             // Update radio button based on previous selection
             if (game.lastCategory) {
@@ -931,8 +949,7 @@
             }
           } else {
             searchWidgets.classList.add("hidden")
-            searchBar.classList.add("hidden")
-            searchButton.classList.add("hidden")
+            searchForm.classList.add("hidden")
             searchResults.innerHTML = ""
             document.getElementById(
               "instruction-text"
@@ -955,10 +972,7 @@
               ).textContent = `You've been challenged! Name ${
                 lastCategory === "movie" ? "an actor from" : "a movie starring"
               } ${lastSelection}`
-              document.getElementById("search-bar").classList.remove("hidden")
-              document
-                .getElementById("search-button")
-                .classList.remove("hidden")
+              document.getElementById("search-form").classList.remove("hidden")
             } else {
               giveUpBtn.classList.add("hidden")
               document.getElementById(
