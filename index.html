@@ -67,6 +67,12 @@
         color: #dee2e6;
         font-size: 1.5rem;
       }
+      #category {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        margin-block: 0.25rem;
+      }
       #content {
         margin-inline: auto;
         max-width: 28rem;
@@ -190,7 +196,7 @@
       }
       .selection-chain {
         color: #495057;
-        padding: 0.5rem;
+        padding-block: 0.5rem;
       }
       #selection-history {
         background-color: #f8f9fa;
@@ -297,7 +303,7 @@
         </form>
         <ul id="search-results"></ul>
         <div id="selection-history">
-          <h3>Selection Chain</h3>
+          <h3>Rounds</h3>
           <div class="selection-chain"></div>
         </div>
       </div>
@@ -518,24 +524,17 @@
             updateGamesList(message.games)
             break
           case "error":
-            if (message.message === "Game not found") {
-              // Stop reconnection attempts if game doesn't exist
+            // Stop reconnection attempts if game doesn't exist
+            if (message.message === "Game not found")
               gameState.shouldReconnect = false
-              localStorage.removeItem("gameId")
-              localStorage.removeItem("playerName")
-              document.getElementById("lobby").classList.remove("hidden")
-              document.getElementById("waiting-room").classList.add("hidden")
-              document.getElementById("game-area").classList.add("hidden")
-              alert("Game not found. Returning to lobby.")
-            } else if (message.message === "Your join request was rejected") {
-              // Return to lobby if rejected
-              localStorage.removeItem("gameId")
-              localStorage.removeItem("playerName")
-              document.getElementById("lobby").classList.remove("hidden")
-              document.getElementById("waiting-room").classList.add("hidden")
-              document.getElementById("game-area").classList.add("hidden")
-              alert("Your join request was rejected")
-            }
+
+            // Clear game state and return to lobby
+            localStorage.removeItem("gameId")
+            localStorage.removeItem("playerName")
+            document.getElementById("lobby").classList.remove("hidden")
+            document.getElementById("waiting-room").classList.add("hidden")
+            document.getElementById("game-area").classList.add("hidden")
+            alert(message.message)
             break
           case "game_ended":
             // Stop countdown when game ends
