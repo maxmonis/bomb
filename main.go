@@ -289,10 +289,14 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // Get current time in milliseconds since Unix epoch
+    timestamp := time.Now().UnixMilli()
+    
+    // Convert to string
+    tsString := fmt.Sprintf("%d", timestamp)
+    
     // Generate game ID using creator name and last 8 digits of current timestamp
-    timestamp := time.Now().UnixNano()
-    lastEightDigits := fmt.Sprintf("%08d", timestamp%100000000)
-    gameID := fmt.Sprintf("%s-%s", req.CreatorName, lastEightDigits)
+    gameID := fmt.Sprintf("%s-%s", req.CreatorName, tsString[len(tsString)-8:])
 
     game := &Game{
         ID:           gameID,
