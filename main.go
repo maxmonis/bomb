@@ -76,22 +76,15 @@ var (
 
 func broadcastAvailableGames() {
 	gamesMutex.Lock()
-	type GameInfo struct {
-		ID        string `json:"id"`
-		CreatorID string `json:"creatorId"`
-	}
-	var gameList []GameInfo
-	for gameID, game := range games {
-		gameList = append(gameList, GameInfo{
-			ID:        gameID,
-			CreatorID: game.CreatorID,
-		})
+	var gameList []string
+	for gameID := range games {
+		gameList = append(gameList, gameID)
 	}
 	gamesMutex.Unlock()
 
 	message := struct {
-		Type  string    `json:"type"`
-		Games []GameInfo `json:"games"`
+		Type  string   `json:"type"`
+		Games []string `json:"games"`
 	}{
 		Type:  "available_games",
 		Games: gameList,

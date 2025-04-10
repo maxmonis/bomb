@@ -69,7 +69,7 @@
       }
       #content {
         margin-inline: auto;
-        max-width: 32rem;
+        max-width: 28rem;
         padding: 1.5rem 1rem;
       }
       #countdown {
@@ -84,6 +84,17 @@
         display: grid;
         gap: 0.25rem;
       }
+      #games-list li,
+      #search-results li {
+        align-items: center;
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        padding-block: 0.25rem;
+      }
+      #games-list li button {
+        white-space: nowrap;
+      }
       .join-buttons {
         display: flex;
         gap: 0.5rem;
@@ -94,18 +105,25 @@
         gap: 0.5rem;
       }
       .join-request {
-        border: 1px solid #ccc;
-        margin: 0.5rem 0;
-        padding: 0.5rem;
+        display: grid;
+        gap: 0.5rem;
+      }
+      .join-request li {
+        display: flex;
+        justify-content: space-between;
+      }
+      .join-request li div:last-child {
+        display: flex;
       }
       #join-requests {
-        margin: 1.5rem 0;
+        margin-block: 0.5rem 1.5rem;
       }
       #lobby {
         display: grid;
         gap: 1rem;
       }
-      #no-games {
+      #no-games,
+      #no-pending-players {
         color: #495057;
         margin-block-start: 0.5rem;
       }
@@ -131,6 +149,11 @@
         margin: 1.5rem 0;
         padding: 0.5rem;
       }
+      .players {
+        display: grid;
+        gap: 0.5rem;
+        margin-block: 1rem;
+      }
       #site-name {
         font-weight: 700;
         margin-block-end: 1rem;
@@ -139,17 +162,6 @@
       #search-results {
         display: grid;
         padding: 0.5rem 0.25rem;
-      }
-      #games-list li,
-      #search-results li {
-        align-items: center;
-        display: flex;
-        gap: 1rem;
-        justify-content: space-between;
-        padding-block: 0.25rem;
-      }
-      #games-list li button {
-        white-space: nowrap;
       }
       .selected-actor {
         color: #cc6600;
@@ -179,6 +191,10 @@
         background-color: #e8f4ff;
         border-color: #007bff;
       }
+      #waiting-room {
+        display: grid;
+        gap: 0.5rem;
+      }
     </style>
   </head>
   <body>
@@ -189,7 +205,7 @@
         <div id="available-games">
           <h2>Available Games</h2>
           <ul id="games-list"></ul>
-          <small id="no-games">No games available</small>
+          <p id="no-games">No games available</p>
         </div>
         <div id="create-game">
           <h2>Create New Game</h2>
@@ -218,10 +234,13 @@
         <div id="pending-message" class="hidden">
           <p>Waiting for the creator to admit you to the game...</p>
         </div>
-        <h2>Players:</h2>
-        <ul id="players-list"></ul>
+        <div class="players">
+          <h3>Players:</h3>
+          <p id="players-list"></p>
+        </div>
         <div id="creator-controls" class="hidden">
-          <h2>Join Requests:</h2>
+          <h3>Pending Players:</h3>
+          <p id="no-pending-players">No pending players</p>
           <div id="join-requests"></div>
           <button id="start-game-btn" disabled>Start Game</button>
         </div>
@@ -716,21 +735,22 @@
         }
       }
 
-      function updateGamesList(games) {
+      function updateGamesList(gameIds) {
+        gameIds ??= []
         const gamesList = document.getElementById("games-list")
         const joinGameSection = document.getElementById("join-game")
         document
           .getElementById("no-games")
-          .classList.toggle("hidden", games.length > 0)
+          .classList.toggle("hidden", gameIds.length > 0)
         gamesList.innerHTML = ""
-        games.forEach((game) => {
+        gameIds.forEach((gameId) => {
           const li = document.createElement("li")
           const joinButton = document.createElement("button")
           joinButton.textContent = "Join Game"
           joinButton.onclick = () => {
             // Show join game form
             joinGameSection.classList.remove("hidden")
-            document.getElementById("join-game-id").textContent = game.id
+            document.getElementById("join-game-id").textContent = gameId
             document.getElementById("player-name").focus()
             document.getElementById("available-games").classList.add("hidden")
             document.getElementById("create-game").classList.add("hidden")
@@ -738,7 +758,7 @@
             document.getElementById("player-name").value = ""
             document.getElementById("join-message").value = ""
           }
-          li.textContent = `${game.creatorId}'s game - ${game.id}`
+          li.textContent = gameId
           li.appendChild(joinButton)
           gamesList.appendChild(li)
         })
@@ -759,24 +779,11 @@
         const selectionHistory = document.getElementById("selection-history")
         const selectionChain = document.querySelector(".selection-chain")
 
-        // Clear the players list
-        playersList.innerHTML = ""
-
-        // Always update the players list when we have players
-        game.players.forEach((player) => {
-          const li = document.createElement("li")
-          // Set player name, followed by (You) if it's the current player
-          li.textContent = player.name
-          if (player.name === gameState.currentPlayer) {
-            li.textContent += " (You)"
-          }
-          // Add BOMB letters if any
-          if (player.letters > 0) {
-            const letters = "BOMB".slice(0, player.letters)
-            li.textContent += ` [${letters}]`
-          }
-          playersList.appendChild(li)
-        })
+        // Update player list
+        playersList.innerHTML = game.players.reduce((acc, player) => {
+          acc += acc ? `, ${player.name}` : player.name
+          return acc
+        }, "")
 
         // Update isCreator flag based on game state
         gameState.isCreator = game.creatorId === gameState.playerName
@@ -1011,21 +1018,32 @@
 
             // Make sure joinRequests exists and is an object
             if (game.joinRequests && typeof game.joinRequests === "object") {
-              console.log("Join requests:", game.joinRequests)
-              Object.entries(game.joinRequests).forEach(([name, request]) => {
-                const requestDiv = document.createElement("div")
-                requestDiv.className = "join-request"
-                requestDiv.innerHTML = `
-                            <p><strong>${name}</strong></p>
-                            ${
-                              request.message
-                                ? `<p>Message: ${request.message}</p>`
-                                : ""
-                            }
-                            <button onclick="handleJoinRequest('${name}', true)">Admit</button>
-                            <button class="red" onclick="handleJoinRequest('${name}', false)">Reject</button>
-                        `
-                requestsDiv.appendChild(requestDiv)
+              const requests = Object.entries(game.joinRequests)
+              document
+                .getElementById("no-pending-players")
+                .classList.toggle("hidden", requests.length > 0)
+              requests.forEach(([name, request]) => {
+                const requestList = document.createElement("ul")
+                requestList.className = "join-request"
+                requestList.innerHTML = `
+                  <li>
+                    <div>
+                      <p><strong>${name}</strong></p>
+                      ${
+                        request.message
+                          ? `<small>${request.message
+                              .split("\n")
+                              .join("<br>")}</small>`
+                          : ""
+                      }
+                    </div>
+                    <div>
+                      <button onclick="handleJoinRequest('${name}', true)">Admit</button>
+                      <button class="red" onclick="handleJoinRequest('${name}', false)">Reject</button>
+                    <div>
+                </li>
+                `
+                requestsDiv.appendChild(requestList)
               })
             }
 
