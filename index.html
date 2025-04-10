@@ -527,14 +527,26 @@
           if (game.challengeState) {
             challengeBtn.classList.add("hidden")
             if (game.challengeState.challengedName === gameState.playerName) {
+              // Show give up button only to the challenged player
               giveUpBtn.classList.remove("hidden")
+              document.getElementById("instruction-text").textContent =
+                "You've been challenged! Make a valid selection or give up."
+              document.getElementById("search-bar").classList.remove("hidden")
+              document
+                .getElementById("search-button")
+                .classList.remove("hidden")
             } else {
               giveUpBtn.classList.add("hidden")
+              document.getElementById(
+                "instruction-text"
+              ).textContent = `Waiting for ${game.challengeState.challengedName} to respond to the challenge...`
             }
           } else {
             giveUpBtn.classList.add("hidden")
+            // Only show challenge button if there's a last selection and it's the current player's turn
             if (
-              currentPlayerName !== gameState.playerName &&
+              currentPlayerName === gameState.playerName &&
+              game.lastSelection &&
               game.roundStarted
             ) {
               challengeBtn.classList.remove("hidden")

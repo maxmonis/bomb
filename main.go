@@ -487,15 +487,70 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             return
         }
         
-        // Acquire mutex
         game.Mu.Lock()
         
-        // Check conditions under lock
-        canMakeSelection := game.Players[game.CurrentPlayer].Name == player.Name && game.ChallengeState == nil
-        roundStarted := game.RoundStarted
+        // Check if this is a challenge response or normal turn
+        if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
+            isValid := validateSelection(game, content.Selection, content.Category)
+            
+            if isValid {
+                // Challenge failed, add letter to challenger
+                for i, p := range game.Players {
+                    if p.Name == game.ChallengeState.ChallengerName {
+                        p.Letters++
+                        if p.Letters >= 4 {
+                            // Remove challenger if they spell BOMB
+                            game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                            
+                            // If only one player remains, they win
+                            if len(game.Players) == 1 {
+                                game.Mu.Unlock()
+                                handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
+                                return
+                            }
+                        }
+                        break
+                    }
+                }
+            } else {
+                // Challenge succeeded, add letter to challenged player
+                for i, p := range game.Players {
+                    if p.Name == player.Name {
+                        p.Letters++
+                        if p.Letters >= 4 {
+                            // Remove challenged player if they spell BOMB
+                            game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                            
+                            // If only one player remains, they win
+                            if len(game.Players) == 1 {
+                                game.Mu.Unlock()
+                                handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
+                                return
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+            
+            // Reset game state for next round
+            game.ChallengeState = nil
+            game.LastSelection = ""
+            game.LastCategory = ""
+            game.RoundStarted = false
+            game.TimeLeft = 30
+            // Move to next player after the challenged player
+            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+            
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            startTimer(game)
+            return
+        }
         
-        if canMakeSelection {
-            validSelection := !roundStarted || validateSelection(game, content.Selection, content.Category)
+        // Normal turn handling
+        if game.Players[game.CurrentPlayer].Name == player.Name && game.ChallengeState == nil {
+            validSelection := !game.RoundStarted || validateSelection(game, content.Selection, content.Category)
             if validSelection {
                 game.LastSelection = content.Selection
                 game.LastCategory = content.Category
@@ -503,16 +558,13 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 game.SelectionHistory = append(game.SelectionHistory, content.Selection)
                 game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
                 game.RoundStarted = true
-            }
-            
-            // Release mutex before broadcasting
-            game.Mu.Unlock()
-            
-            if validSelection {
+                game.TimeLeft = 30
+                
+                game.Mu.Unlock()
                 broadcastGameState(game)
-                // Start timer for next player immediately after valid selection
                 startTimer(game)
             } else {
+                game.Mu.Unlock()
                 player.Conn.WriteJSON(map[string]string{
                     "type": "error",
                     "message": "Invalid selection",
@@ -537,15 +589,24 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     case "challenge":
         game.Mu.Lock()
         if game.RoundStarted && game.ChallengeState == nil {
+            // Find the previous player
             previousPlayerIndex := (game.CurrentPlayer - 1 + len(game.Players)) % len(game.Players)
+            previousPlayer := game.Players[previousPlayerIndex]
+            
+            // Set up challenge state
             game.ChallengeState = &ChallengeState{
                 ChallengerName: player.Name,
-                ChallengedName: game.Players[previousPlayerIndex].Name,
-                ExpectedCategory: game.LastCategory,
+                ChallengedName: previousPlayer.Name,
+                ExpectedCategory: game.LastCategory, // The category they need to validate
             }
+            
+            // Give control back to the challenged player
             game.CurrentPlayer = previousPlayerIndex
+            game.TimeLeft = 30 // Reset timer for challenged player
+            
             game.Mu.Unlock()
             broadcastGameState(game)
+            startTimer(game) // Start timer for challenged player
         } else {
             game.Mu.Unlock()
         }
@@ -557,20 +618,33 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             for i, p := range game.Players {
                 if p.Name == player.Name {
                     p.Letters++
-                    shouldRemove := p.Letters >= 4
-                    if shouldRemove {
+                    if p.Letters >= 4 {
+                        // Remove player if they spell BOMB
                         game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                        
+                        // If only one player remains, they win
+                        if len(game.Players) == 1 {
+                            game.Mu.Unlock()
+                            handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
+                            return
+                        }
                     }
                     break
                 }
             }
-            // Reset round
+            
+            // Reset game state for next round
             game.ChallengeState = nil
             game.LastSelection = ""
             game.LastCategory = ""
             game.RoundStarted = false
+            game.TimeLeft = 30
+            // Move to next player after the challenged player
+            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+            
             game.Mu.Unlock()
             broadcastGameState(game)
+            startTimer(game)
         } else {
             game.Mu.Unlock()
         }
@@ -682,6 +756,24 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
     } else {
         game.Mu.Unlock()
     }
+}
+
+func handleGameEnded(game *Game, message string) {
+    // Notify all players
+    for _, p := range game.Players {
+        p.Conn.WriteJSON(map[string]string{
+            "type": "game_ended",
+            "message": message,
+        })
+    }
+    
+    // Remove game from global state
+    gamesMutex.Lock()
+    delete(games, game.ID)
+    gamesMutex.Unlock()
+    
+    // Broadcast updated game list to lobby
+    broadcastAvailableGames()
 }
 
 func startTimer(game *Game) {
