@@ -8,14 +8,15 @@
     />
     <title>BOMB</title>
     <style>
+      /* -------------------- Tags -------------------- */
       * {
         box-sizing: border-box;
+        font: inherit;
         margin: 0;
         padding: 0;
       }
       body {
         font-family: Arial, sans-serif;
-        padding: 1.5rem;
       }
       button {
         background-color: #007bff;
@@ -29,86 +30,146 @@
         background-color: #ccc;
         cursor: not-allowed;
       }
+      h1 {
+        font-size: 2.5rem;
+      }
+      h2 {
+        font-size: 1.5rem;
+      }
+      h3 {
+        font-size: 1.25rem;
+      }
       input,
       textarea {
         border-radius: 0.25rem;
+        border: 1px solid #ccc;
         padding: 0.25rem 0.5rem;
       }
-      #countdown {
-        font-size: 2em;
+      textarea {
+        min-height: 3rem;
+        resize: vertical;
       }
+      ul {
+        list-style-type: none;
+      }
+
+      /* -------------------- Utilities -------------------- */
       .hidden {
-        display: none;
+        display: none !important;
+      }
+      .red {
+        background: none;
+        color: #c20817;
+      }
+
+      /* -------------------- Classes/IDs -------------------- */
+      .bomb-letter {
+        color: #dee2e6;
+        font-size: 1.5rem;
+      }
+      #content {
+        margin-inline: auto;
+        max-width: 32rem;
+        padding: 1.5rem 1rem;
+      }
+      #countdown {
+        font-size: 2rem;
+      }
+      #create-game {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .game-area {
+        display: grid;
+        gap: 0.25rem;
       }
       #join-game {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
       }
-      .player-status {
-        display: flex;
-        justify-content: space-around;
-        margin: 20px 0;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-      }
-      .player {
-        text-align: center;
-        margin: 0 20px;
-        padding: 10px;
-      }
-      .bomb-letter {
-        color: gray;
-        font-size: 1.5em;
-      }
-      .red {
-        color: red;
+      .join-request {
+        border: 1px solid #ccc;
+        margin: 0.5rem 0;
+        padding: 0.5rem;
       }
       #join-requests {
-        margin: 20px 0;
+        margin: 1.5rem 0;
       }
-      .join-request {
-        margin: 10px 0;
-        padding: 10px;
-        border: 1px solid #ccc;
+      #lobby {
+        display: grid;
+        gap: 1rem;
+      }
+      #no-games {
+        color: #495057;
+        margin-block-start: 0.5rem;
       }
       #pending-message {
-        margin: 20px 0;
-        padding: 10px;
         background-color: #fff3cd;
+        border-radius: 0.25rem;
         border: 1px solid #ffeeba;
-        border-radius: 4px;
         color: #856404;
+        margin: 1.5rem 0;
+        padding: 0.5rem;
       }
-      #selection-history {
-        margin: 20px 0;
-        padding: 15px;
+      .player {
+        margin: 0 1.5rem;
+        padding: 0.5rem;
+        text-align: center;
+      }
+      #player-status {
         background-color: #f8f9fa;
+        border-radius: 0.25rem;
         border: 1px solid #dee2e6;
-        border-radius: 4px;
+        display: flex;
+        justify-content: space-around;
+        margin: 1.5rem 0;
+        padding: 0.5rem;
+      }
+      #site-name {
+        font-weight: 700;
+        margin-block-end: 1rem;
+        text-align: center;
+      }
+      #search-results {
+        display: grid;
+        padding: 0.5rem 0.25rem;
+      }
+      #games-list li,
+      #search-results li {
+        align-items: center;
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        padding-block: 0.25rem;
+      }
+      #games-list li button {
+        white-space: nowrap;
+      }
+      .selected-actor {
+        color: #cc6600;
+      }
+      .selected-movie {
+        color: #0066cc;
       }
       .selection-chain {
-        font-size: 1.1em;
         color: #495057;
-        line-height: 1.5;
-        padding: 10px;
+        padding: 0.5rem;
       }
-      .movie-selection {
-        color: #0066cc;
-        font-weight: bold;
-      }
-      .actor-selection {
-        color: #cc6600;
-        font-weight: bold;
+      #selection-history {
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+        border: 1px solid #dee2e6;
+        margin: 1.5rem 0;
+        padding: 1rem;
       }
       .selection-round {
-        margin: 10px 0;
-        padding: 10px;
         background-color: #fff;
+        border-radius: 0.25rem;
         border: 1px solid #dee2e6;
-        border-radius: 4px;
+        margin: 0.5rem 0;
+        padding: 0.5rem;
       }
       .selection-round.current {
         background-color: #e8f4ff;
@@ -117,72 +178,75 @@
     </style>
   </head>
   <body>
-    <h1>BOMB</h1>
+    <div id="content">
+      <h1 id="site-name">BOMB</h1>
 
-    <div id="lobby" class="hidden">
-      <h2>Game Lobby</h2>
-      <div id="available-games">
-        <h3>Available Games</h3>
-        <ul id="games-list"></ul>
+      <div id="lobby" class="hidden">
+        <h2>Game Lobby</h2>
+        <div id="available-games">
+          <h3>Available Games</h3>
+          <ul id="games-list"></ul>
+          <small id="no-games">No games available</small>
+        </div>
+        <div id="create-game">
+          <h3>Create New Game</h3>
+          <input type="text" id="creator-name" placeholder="Enter your name" />
+          <button id="create-game-btn">Create Game</button>
+        </div>
+        <div id="join-game">
+          <h3>Join Game</h3>
+          <input type="text" id="game-id" placeholder="Enter game ID" />
+          <input type="text" id="player-name" placeholder="Enter your name" />
+          <textarea
+            type="text"
+            id="join-message"
+            placeholder="Message to creator (optional)"
+          ></textarea>
+          <button id="join-game-btn">Join Game</button>
+        </div>
       </div>
-      <div id="create-game">
-        <h3>Create New Game</h3>
-        <input type="text" id="creator-name" placeholder="Enter your name" />
-        <button id="create-game-btn">Create Game</button>
-      </div>
-      <div id="join-game">
-        <h3>Join Game</h3>
-        <input type="text" id="game-id" placeholder="Enter game ID" />
-        <input type="text" id="player-name" placeholder="Enter your name" />
-        <textarea
-          type="text"
-          id="join-message"
-          placeholder="Message to creator (optional)"
-        ></textarea>
-        <button id="join-game-btn">Join Game</button>
-      </div>
-    </div>
 
-    <div id="waiting-room" class="hidden">
-      <h2>Waiting Room</h2>
-      <p>Game ID: <span id="game-id-display"></span></p>
-      <div id="pending-message" class="hidden">
-        <p>Waiting for the creator to admit you to the game...</p>
+      <div id="waiting-room" class="hidden">
+        <h2>Waiting Room</h2>
+        <p>Game ID: <span id="game-id-display"></span></p>
+        <div id="pending-message" class="hidden">
+          <p>Waiting for the creator to admit you to the game...</p>
+        </div>
+        <h3>Players:</h3>
+        <ul id="players-list"></ul>
+        <div id="creator-controls" class="hidden">
+          <h3>Join Requests:</h3>
+          <div id="join-requests"></div>
+          <button id="start-game-btn" disabled>Start Game</button>
+        </div>
       </div>
-      <h3>Players:</h3>
-      <ul id="players-list"></ul>
-      <div id="creator-controls" class="hidden">
-        <h3>Join Requests:</h3>
-        <div id="join-requests"></div>
-        <button id="start-game-btn" disabled>Start Game</button>
-      </div>
-    </div>
 
-    <div class="player-status hidden" id="player-status">
-      <!-- Player statuses will be dynamically added here -->
-    </div>
-
-    <div id="game-area" class="hidden">
-      <h2>Current Player: <span id="current-player"></span></h2>
-      <div id="countdown">30</div>
-      <div id="category-selection">
-        <label
-          ><input type="radio" name="category" value="movie" checked />
-          Movie</label
-        >
-        <label
-          ><input type="radio" name="category" value="actor" /> Actor</label
-        >
+      <div class="hidden" id="player-status">
+        <!-- Player statuses will be dynamically added here -->
       </div>
-      <p id="instruction-text"></p>
-      <input type="text" id="search-bar" />
-      <button id="search-button">Search</button>
-      <ul id="search-results"></ul>
-      <button id="challenge" class="hidden">Challenge</button>
-      <button id="give-up" class="hidden">Give Up</button>
-      <div id="selection-history">
-        <h3>Selection Chain</h3>
-        <div class="selection-chain"></div>
+
+      <div id="game-area" class="hidden">
+        <h2>Current Player: <span id="current-player"></span></h2>
+        <div id="countdown">30</div>
+        <div id="category">
+          <label
+            ><input type="radio" name="category" value="movie" checked />
+            Movie</label
+          >
+          <label
+            ><input type="radio" name="category" value="actor" /> Actor</label
+          >
+        </div>
+        <p id="instruction-text"></p>
+        <input type="text" id="search-bar" />
+        <button id="search-button">Search</button>
+        <button id="challenge" class="red hidden">Challenge</button>
+        <button id="give-up" class="red hidden">Give Up</button>
+        <ul id="search-results"></ul>
+        <div id="selection-history">
+          <h3>Selection Chain</h3>
+          <div class="selection-chain"></div>
+        </div>
       </div>
     </div>
 
@@ -621,9 +685,7 @@
             document.getElementById("instruction-text").textContent =
               "Time's up!"
             // Hide all game controls immediately
-            document
-              .getElementById("category-selection")
-              .classList.add("hidden")
+            document.getElementById("category").classList.add("hidden")
             document.getElementById("search-bar").classList.add("hidden")
             document.getElementById("search-button").classList.add("hidden")
             document.getElementById("search-results").innerHTML = ""
@@ -644,6 +706,9 @@
 
       function updateGamesList(games) {
         const gamesList = document.getElementById("games-list")
+        if (games.length) {
+          document.getElementById("no-games").classList.add("hidden")
+        }
         gamesList.innerHTML = ""
         games.forEach((game) => {
           const li = document.createElement("li")
@@ -651,6 +716,7 @@
           joinButton.textContent = "Join Game"
           joinButton.onclick = () => {
             document.getElementById("game-id").value = game.id
+            document.getElementById("player-name").focus()
           }
           li.textContent = `${game.creatorId}'s game - ${game.id}`
           li.appendChild(joinButton)
@@ -665,7 +731,7 @@
         const playersList = document.getElementById("players-list")
         const creatorControls = document.getElementById("creator-controls")
         const pendingMessage = document.getElementById("pending-message")
-        const searchWidgets = document.getElementById("category-selection")
+        const searchWidgets = document.getElementById("category")
         const searchBar = document.getElementById("search-bar")
         const searchButton = document.getElementById("search-button")
         const searchResults = document.getElementById("search-results")
@@ -833,7 +899,7 @@
                 "instruction-text"
               ).textContent = `You've been challenged! Name ${
                 lastCategory === "movie" ? "an actor from" : "a movie starring"
-              } ${lastSelection} or give up`
+              } ${lastSelection}`
               document.getElementById("search-bar").classList.remove("hidden")
               document
                 .getElementById("search-button")
@@ -872,7 +938,7 @@
               html += game.selectionHistory
                 .map((selection, idx) => {
                   const type = idx % 2 === 0 ? "movie" : "actor"
-                  return `<span class="${type}-selection">${selection}</span>`
+                  return `<span class="selected-${type}">${selection}</span>`
                 })
                 .join(" → ")
               html += "</div>"
@@ -937,7 +1003,7 @@
                                 : ""
                             }
                             <button onclick="handleJoinRequest('${name}', true)">Admit</button>
-                            <button onclick="handleJoinRequest('${name}', false)">Reject</button>
+                            <button class="red" onclick="handleJoinRequest('${name}', false)">Reject</button>
                         `
                 requestsDiv.appendChild(requestDiv)
               })
