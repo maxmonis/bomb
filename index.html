@@ -393,7 +393,7 @@
             handleGameEnded(message)
             break
           case "available_games":
-            updateAvailableGames(message.games)
+            updateGamesList(message.games)
             break
           case "join_accepted":
             // Remove pending message when accepted
@@ -625,23 +625,6 @@
           gameState.timerInterval = null
           gameState.turnStartTime = null
         }
-      }
-
-      function updateAvailableGames(games) {
-        const gamesList = document.getElementById("games-list")
-        gamesList.innerHTML = ""
-        games.forEach((gameId) => {
-          const li = document.createElement("li")
-          li.textContent = `Game ID: ${gameId}`
-          const joinBtn = document.createElement("button")
-          joinBtn.textContent = "Join"
-          joinBtn.onclick = () => {
-            document.getElementById("game-id").value = gameId
-            document.getElementById("game-id").scrollIntoView()
-          }
-          li.appendChild(joinBtn)
-          gamesList.appendChild(li)
-        })
       }
 
       function updateGamesList(games) {
