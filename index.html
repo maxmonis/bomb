@@ -103,6 +103,17 @@
         color: #cc6600;
         font-weight: bold;
       }
+      .selection-round {
+        margin: 10px 0;
+        padding: 10px;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+      }
+      .selection-round.current {
+        background-color: #e8f4ff;
+        border-color: #007bff;
+      }
     </style>
   </head>
   <body>
@@ -543,8 +554,8 @@
               document.getElementById(
                 "instruction-text"
               ).textContent = `You've been challenged! Name ${
-                lastCategory === "movie" ? "an actor" : "a movie"
-              } from ${lastSelection} or give up`
+                lastCategory === "movie" ? "an actor from" : "a movie starring"
+              } ${lastSelection} or give up`
               document.getElementById("search-bar").classList.remove("hidden")
               document
                 .getElementById("search-button")
@@ -570,14 +581,42 @@
           }
 
           // Update selection history
-          if (game.selectionHistory && game.selectionHistory.length > 0) {
+          if (
+            (game.selectionRounds && game.selectionRounds.length > 0) ||
+            game.selectionHistory.length > 0
+          ) {
             const chain = document.querySelector(".selection-chain")
-            chain.innerHTML = game.selectionHistory
-              .map((selection, idx) => {
-                const type = idx % 2 === 0 ? "movie" : "actor"
-                return `<span class="${type}-selection">${selection}</span>`
+            let html = ""
+
+            // Show current round if there are selections
+            if (game.selectionHistory && game.selectionHistory.length > 0) {
+              html += `<div class="selection-round current">Current Round: `
+              html += game.selectionHistory
+                .map((selection, idx) => {
+                  const type = idx % 2 === 0 ? "movie" : "actor"
+                  return `<span class="${type}-selection">${selection}</span>`
+                })
+                .join(" → ")
+              html += "</div>"
+            }
+
+            // Show completed rounds
+            if (game.selectionRounds && game.selectionRounds.length > 0) {
+              game.selectionRounds.reverse().forEach((round, roundIndex) => {
+                html += `<div class="selection-round">Round ${
+                  game.selectionRounds.length - roundIndex
+                }: `
+                html += round
+                  .map((selection, idx) => {
+                    const type = idx % 2 === 0 ? "movie" : "actor"
+                    return `<span class="${type}-selection">${selection}</span>`
+                  })
+                  .join(" → ")
+                html += "</div>"
               })
-              .join(" → ")
+            }
+
+            chain.innerHTML = html
             document
               .getElementById("selection-history")
               .classList.remove("hidden")

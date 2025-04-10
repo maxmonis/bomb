@@ -44,6 +44,8 @@ type Game struct {
 	TimeLeft        int                    `json:"timeLeft"`
 	PendingConns    map[string]*websocket.Conn `json:"-"`
 	SelectionHistory []string          `json:"selectionHistory"`
+	SelectionRounds  [][]string       `json:"selectionRounds"`
+	IsNewRound      bool              `json:"isNewRound"`
 }
 
 type ChallengeState struct {
@@ -243,6 +245,7 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
         JoinRequests: make(map[string]JoinRequest),
         PendingConns: make(map[string]*websocket.Conn),
         SelectionHistory: make([]string, 0),
+        SelectionRounds: make([][]string, 0),
     }
 
     gamesMutex.Lock()
@@ -494,10 +497,21 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             isValid := validateSelection(game, content.Selection, content.Category)
             
             if isValid {
-                // Challenge failed, add letter to challenger
+                // Challenge failed, add letter to challenger and add valid selection to history
+                game.SelectionHistory = append(game.SelectionHistory, content.Selection)
+                game.LastSelection = content.Selection
+                game.LastCategory = content.Category
+                game.UsedItems[content.Selection] = true
+                
                 for i, p := range game.Players {
                     if p.Name == game.ChallengeState.ChallengerName {
                         p.Letters++
+                        // Start a new round since a player got a letter
+                        if len(game.SelectionHistory) > 0 {
+                            game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
+                            game.SelectionHistory = make([]string, 0)
+                        }
+                        game.IsNewRound = true
                         if p.Letters >= 4 {
                             // Remove challenger if they spell BOMB
                             game.Players = append(game.Players[:i], game.Players[i+1:]...)
@@ -517,6 +531,12 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 for i, p := range game.Players {
                     if p.Name == player.Name {
                         p.Letters++
+                        // Start a new round since a player got a letter
+                        if len(game.SelectionHistory) > 0 {
+                            game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
+                            game.SelectionHistory = make([]string, 0)
+                        }
+                        game.IsNewRound = true
                         if p.Letters >= 4 {
                             // Remove challenged player if they spell BOMB
                             game.Players = append(game.Players[:i], game.Players[i+1:]...)
@@ -813,6 +833,12 @@ func handleTimeExpiry(game *Game) {
     for i, p := range game.Players {
         if i == game.CurrentPlayer {
             p.Letters++
+            // Start a new round since a player got a letter
+            if len(game.SelectionHistory) > 0 {
+                game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
+                game.SelectionHistory = make([]string, 0)
+            }
+            game.IsNewRound = true
             // If player has spelled BOMB, remove them
             if p.Letters >= 4 {
                 game.Players = append(game.Players[:i], game.Players[i+1:]...)
@@ -894,6 +920,8 @@ func broadcastGameState(game *Game) {
             JoinRequests:   make(map[string]JoinRequest),
             TimeLeft:       game.TimeLeft,
             SelectionHistory: game.SelectionHistory,
+            SelectionRounds: game.SelectionRounds,
+            IsNewRound: game.IsNewRound,
         },
     }
 
