@@ -969,7 +969,7 @@
               let lastCategory = game.lastCategory
               document.getElementById(
                 "instruction-text"
-              ).textContent = `You've been challenged! Name ${
+              ).innerHTML = `You've been challenged!<br /> Name ${
                 lastCategory === "movie" ? "an actor from" : "a movie starring"
               } ${lastSelection}`
               document.getElementById("search-form").classList.remove("hidden")
