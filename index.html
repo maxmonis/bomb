@@ -164,11 +164,7 @@
         >
       </div>
       <p id="instruction-text"></p>
-      <input
-        type="text"
-        id="search-bar"
-        placeholder="Search for a movie or actor"
-      />
+      <input type="text" id="search-bar" />
       <button id="search-button">Search</button>
       <ul id="search-results"></ul>
       <button id="challenge" class="hidden">Challenge</button>
@@ -467,8 +463,14 @@
               searchWidgets.classList.remove("hidden")
               searchBar.classList.remove("hidden")
               searchButton.classList.remove("hidden")
+              const lastSelection = game.lastSelection
+              const lastCategory = game.lastCategory
               document.getElementById("instruction-text").textContent =
-                "Your turn! Search for a movie or actor"
+                lastSelection
+                  ? lastCategory === "movie"
+                    ? `Name an actor from ${lastSelection}`
+                    : `Name a movie starring ${lastSelection}`
+                  : "Your turn! Name any movie or actor to start"
             } else if (game.timeLeft === 0) {
               // Time expired state
               stopLocalCountdown()
@@ -499,8 +501,15 @@
             searchWidgets.classList.toggle("hidden", !!game.lastCategory)
             searchBar.classList.remove("hidden")
             searchButton.classList.remove("hidden")
+
+            const lastSelection = game.lastSelection
+            const lastCategory = game.lastCategory
             document.getElementById("instruction-text").textContent =
-              "Your turn! Search for a movie or actor"
+              lastSelection
+                ? lastCategory === "movie"
+                  ? `Name an actor from ${lastSelection}`
+                  : `Name a movie starring ${lastSelection}`
+                : "Your turn! Name any movie or actor to start"
 
             // Update radio button based on previous selection
             if (game.lastCategory) {
@@ -529,8 +538,13 @@
             if (game.challengeState.challengedName === gameState.playerName) {
               // Show give up button only to the challenged player
               giveUpBtn.classList.remove("hidden")
-              document.getElementById("instruction-text").textContent =
-                "You've been challenged! Make a valid selection or give up."
+              const lastSelection = game.lastSelection
+              const lastCategory = game.lastCategory
+              document.getElementById(
+                "instruction-text"
+              ).textContent = `You've been challenged! Name ${
+                lastCategory === "movie" ? "an actor" : "a movie"
+              } from ${lastSelection} or give up`
               document.getElementById("search-bar").classList.remove("hidden")
               document
                 .getElementById("search-button")
