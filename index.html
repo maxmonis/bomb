@@ -868,14 +868,14 @@
       function updateGamesList(games) {
         const gamesList = document.getElementById("games-list")
         gamesList.innerHTML = ""
-        games.forEach((gameId) => {
+        games.forEach((game) => {
           const li = document.createElement("li")
           const joinButton = document.createElement("button")
           joinButton.textContent = "Join Game"
           joinButton.onclick = () => {
-            document.getElementById("game-id").value = gameId
+            document.getElementById("game-id").value = game.id
           }
-          li.textContent = `Game: ${gameId} `
+          li.textContent = `${game.creatorId}'s game - ${game.id}`
           li.appendChild(joinButton)
           gamesList.appendChild(li)
         })

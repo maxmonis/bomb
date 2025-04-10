@@ -975,9 +975,16 @@ func handleGetGames(w http.ResponseWriter, r *http.Request) {
 	gamesMutex.Lock()
 	defer gamesMutex.Unlock()
 
-	var gameList []string
-	for gameID := range games {
-		gameList = append(gameList, gameID)
+	type GameInfo struct {
+		ID        string `json:"id"`
+		CreatorID string `json:"creatorId"`
+	}
+	var gameList []GameInfo
+	for gameID, game := range games {
+		gameList = append(gameList, GameInfo{
+			ID:        gameID,
+			CreatorID: game.CreatorID,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -986,15 +993,22 @@ func handleGetGames(w http.ResponseWriter, r *http.Request) {
 
 func broadcastAvailableGames() {
 	gamesMutex.Lock()
-	var gameList []string
-	for gameID := range games {
-		gameList = append(gameList, gameID)
+	type GameInfo struct {
+		ID        string `json:"id"`
+		CreatorID string `json:"creatorId"`
+	}
+	var gameList []GameInfo
+	for gameID, game := range games {
+		gameList = append(gameList, GameInfo{
+			ID:        gameID,
+			CreatorID: game.CreatorID,
+		})
 	}
 	gamesMutex.Unlock()
 
 	message := struct {
-		Type  string   `json:"type"`
-		Games []string `json:"games"`
+		Type  string    `json:"type"`
+		Games []GameInfo `json:"games"`
 	}{
 		Type:  "available_games",
 		Games: gameList,
