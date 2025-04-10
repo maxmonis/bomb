@@ -18,6 +18,7 @@ type Player struct {
 	Name     string `json:"name"`
 	Letters  int    `json:"letters"`
 	IsActive bool   `json:"isActive"`
+	IsEliminated bool `json:"isEliminated"`
 	Conn     *websocket.Conn `json:"-"`
 }
 
@@ -168,14 +169,15 @@ func broadcastGameState(game *Game) {
         }
     }
 
-    // Clean up failed connections
+    // Handle failed connections
     if len(failedConns) > 0 {
         game.Mu.Lock()
         for _, failedConn := range failedConns {
-            // Remove from players if present
-            for i, p := range game.Players {
+            // Find and mark player as inactive, but don't remove them
+            for _, p := range game.Players {
                 if p.Conn == failedConn {
-                    game.Players = append(game.Players[:i], game.Players[i+1:]...)
+                    p.IsActive = false
+                    p.Conn = nil
                     // If this was the creator, end the game
                     if p.Name == game.CreatorID {
                         gamesMutex.Lock()
@@ -416,7 +418,9 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         game.Mu.Lock()
         if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
             // Add letter to challenged player
-            for i, p := range game.Players {
+            var activePlayers int
+            var winner string
+            for _, p := range game.Players {
                 if p.Name == player.Name {
                     p.Letters++
                     // Start a new round since a player got a letter
@@ -426,18 +430,33 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                     game.SelectionHistory = make([]string, 0)
                     game.IsNewRound = true
                     if p.Letters >= 4 {
-                        // Remove player if they spell BOMB
-                        game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                        
-                        // If only one player remains, they win
-                        if len(game.Players) == 1 {
-                            game.Mu.Unlock()
-                            handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
-                            return
+                        // Mark player as eliminated
+                        p.IsEliminated = true
+                        // Send elimination notification
+                        if p.Conn != nil {
+                            p.Conn.WriteJSON(map[string]string{
+                                "type": "player_eliminated",
+                                "message": "You've been eliminated, better luck next time!",
+                            })
                         }
                     }
                     break
                 }
+            }
+
+            // Count active players and find potential winner
+            for _, p := range game.Players {
+                if !p.IsEliminated {
+                    activePlayers++
+                    winner = p.Name
+                }
+            }
+
+            // If only one player remains active, they win
+            if activePlayers == 1 {
+                game.Mu.Unlock()
+                handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
+                return
             }
             
             // Reset game state for next round
@@ -446,8 +465,13 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             game.LastCategory = ""
             game.RoundStarted = false
             game.TimeLeft = 30
-            // Move to next player after the challenged player
-            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+
+            // Find next active player
+            nextPlayer := (game.CurrentPlayer + 1) % len(game.Players)
+            for game.Players[nextPlayer].IsEliminated {
+                nextPlayer = (nextPlayer + 1) % len(game.Players)
+            }
+            game.CurrentPlayer = nextPlayer
             
             game.Mu.Unlock()
             broadcastGameState(game)
@@ -479,7 +503,11 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 game.LastCategory = content.Category
                 game.UsedItems[content.Selection] = true
                 
-                for i, p := range game.Players {
+                var activePlayers int
+                var winner string
+                
+                // Add letter to challenger
+                for _, p := range game.Players {
                     if p.Name == game.ChallengeState.ChallengerName {
                         p.Letters++
                         // Start a new round since a player got a letter
@@ -489,22 +517,39 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                         game.SelectionHistory = make([]string, 0)
                         game.IsNewRound = true
                         if p.Letters >= 4 {
-                            // Remove challenger if they spell BOMB
-                            game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                            
-                            // If only one player remains, they win
-                            if len(game.Players) == 1 {
-                                game.Mu.Unlock()
-                                handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
-                                return
+                            // Mark challenger as eliminated
+                            p.IsEliminated = true
+                            // Send elimination notification
+                            if p.Conn != nil {
+                                p.Conn.WriteJSON(map[string]string{
+                                    "type": "player_eliminated",
+                                    "message": "You've been eliminated, better luck next time!",
+                                })
                             }
                         }
                         break
                     }
                 }
+
+                // Count active players and find potential winner
+                for _, p := range game.Players {
+                    if !p.IsEliminated {
+                        activePlayers++
+                        winner = p.Name
+                    }
+                }
+
+                if activePlayers == 1 {
+                    game.Mu.Unlock()
+                    handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
+                    return
+                }
             } else {
                 // Challenge succeeded, add letter to challenged player
-                for i, p := range game.Players {
+                var activePlayers int
+                var winner string
+                
+                for _, p := range game.Players {
                     if p.Name == player.Name {
                         p.Letters++
                         // Start a new round since a player got a letter
@@ -514,18 +559,32 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                         game.SelectionHistory = make([]string, 0)
                         game.IsNewRound = true
                         if p.Letters >= 4 {
-                            // Remove challenged player if they spell BOMB
-                            game.Players = append(game.Players[:i], game.Players[i+1:]...)
-                            
-                            // If only one player remains, they win
-                            if len(game.Players) == 1 {
-                                game.Mu.Unlock()
-                                handleGameEnded(game, fmt.Sprintf("%s wins!", game.Players[0].Name))
-                                return
+                            // Mark player as eliminated
+                            p.IsEliminated = true
+                            // Send elimination notification
+                            if p.Conn != nil {
+                                p.Conn.WriteJSON(map[string]string{
+                                    "type": "player_eliminated",
+                                    "message": "You've been eliminated, better luck next time!",
+                                })
                             }
                         }
                         break
                     }
+                }
+
+                // Count active players and find potential winner
+                for _, p := range game.Players {
+                    if !p.IsEliminated {
+                        activePlayers++
+                        winner = p.Name
+                    }
+                }
+
+                if activePlayers == 1 {
+                    game.Mu.Unlock()
+                    handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
+                    return
                 }
             }
             
@@ -535,8 +594,13 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             game.LastCategory = ""
             game.RoundStarted = false
             game.TimeLeft = 30
-            // Move to next player after the challenged player
-            game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+
+            // Find next active player
+            nextPlayer := (game.CurrentPlayer + 1) % len(game.Players)
+            for game.Players[nextPlayer].IsEliminated {
+                nextPlayer = (nextPlayer + 1) % len(game.Players)
+            }
+            game.CurrentPlayer = nextPlayer
             
             game.Mu.Unlock()
             broadcastGameState(game)
@@ -552,7 +616,14 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                 game.LastCategory = content.Category
                 game.UsedItems[content.Selection] = true
                 game.SelectionHistory = append(game.SelectionHistory, content.Selection)
-                game.CurrentPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+
+                // Find next active player
+                nextPlayer := (game.CurrentPlayer + 1) % len(game.Players)
+                for game.Players[nextPlayer].IsEliminated {
+                    nextPlayer = (nextPlayer + 1) % len(game.Players)
+                }
+                game.CurrentPlayer = nextPlayer
+                
                 game.RoundStarted = true
                 game.TimeLeft = 30
                 
@@ -636,17 +707,6 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         game.Mu.Unlock()
     }
 
-    // Check for game end
-    game.Mu.Lock()
-    if len(game.Players) == 1 {
-        // Get winner info while holding lock
-        winner := game.Players[0].Name
-        game.Mu.Unlock()
-        // End game and notify players
-        handleGameEnded(game, fmt.Sprintf("Game over! Winner: %s", winner))
-    } else {
-        game.Mu.Unlock()
-    }
 }
 
 func handleGetGames(w http.ResponseWriter, r *http.Request) {
@@ -743,42 +803,45 @@ func handleJoinGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePlayerDisconnect(game *Game, player *Player) {
-	game.Mu.Lock()
-	defer game.Mu.Unlock()
+    game.Mu.Lock()
+    defer game.Mu.Unlock()
 
-	// Remove player from the game
-	for i, p := range game.Players {
-		if p == player {
-			game.Players = append(game.Players[:i], game.Players[i+1:]...)
-			break
-		}
-	}
+    // Mark player as inactive instead of removing them
+    for _, p := range game.Players {
+        if p == player {
+            p.IsActive = false
+            p.Conn = nil
+            break
+        }
+    }
 
-	// If creator disconnects or game is in progress, end the game
-	if player.Name == game.CreatorID || game.InProgress {
-		gamesMutex.Lock()
-		delete(games, game.ID)
-		gamesMutex.Unlock()
-		
-		// Broadcast updated game list to lobby
-		broadcastAvailableGames()
-		
-		// Notify remaining players
-		message := "Game creator disconnected"
-		if game.InProgress && player.Name != game.CreatorID {
-			message = fmt.Sprintf("Player %s disconnected. Game ended.", player.Name)
-		}
-		
-		for _, p := range game.Players {
-			p.Conn.WriteJSON(map[string]string{
-				"type": "game_ended",
-				"message": message,
-			})
-		}
-		return
-	}
+    // If creator disconnects or game is in progress, end the game
+    if player.Name == game.CreatorID || game.InProgress {
+        gamesMutex.Lock()
+        delete(games, game.ID)
+        gamesMutex.Unlock()
+        
+        // Broadcast updated game list to lobby
+        broadcastAvailableGames()
+        
+        // Notify remaining players
+        message := "Game creator disconnected"
+        if game.InProgress && player.Name != game.CreatorID {
+            message = fmt.Sprintf("Player %s disconnected. Game ended.", player.Name)
+        }
+        
+        for _, p := range game.Players {
+            if p.Conn != nil {
+                p.Conn.WriteJSON(map[string]string{
+                    "type": "game_ended",
+                    "message": message,
+                })
+            }
+        }
+        return
+    }
 
-	broadcastGameState(game)
+    broadcastGameState(game)
 }
 
 func handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -919,71 +982,76 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 func handleTimeExpiry(game *Game) {
     game.Mu.Lock()
 
-    // Validate current state before doing anything
+    // Validate current state
     if len(game.Players) <= 1 || game.CurrentPlayer >= len(game.Players) {
         game.Mu.Unlock()
         return
     }
 
-    var eliminated *Player
+    var playerToEliminate *Player
     var nextPlayer int
     var isGameOver bool
     var winner string
+    var activePlayers int
 
     // Add letter to current player and handle potential elimination
     for i, p := range game.Players {
         if i == game.CurrentPlayer {
-            p.Letters++
-            // Start a new round since a player got a letter
-            if len(game.SelectionHistory) > 0 {
-                game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
-            }
-            game.SelectionHistory = make([]string, 0)
-            game.IsNewRound = true
+            if !p.IsEliminated {
+                p.Letters++
+                // Start a new round since a player got a letter
+                if len(game.SelectionHistory) > 0 {
+                    game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
+                }
+                game.SelectionHistory = make([]string, 0)
+                game.IsNewRound = true
 
-            // If player has spelled BOMB, mark them for elimination
-            if p.Letters >= 4 {
-                eliminated = p
+                // If player has spelled BOMB, mark them for elimination
+                if p.Letters >= 4 {
+                    playerToEliminate = p
+                }
             }
             break
         }
     }
 
+    // Count active players and find winner if needed
+    for _, p := range game.Players {
+        if !p.IsEliminated {
+            activePlayers++
+            winner = p.Name
+        }
+    }
+
     // Handle elimination if needed
-    if eliminated != nil {
-        // Send elimination message before modifying game state
-        if eliminated.Conn != nil {
-            eliminated.Conn.WriteJSON(map[string]string{
+    if playerToEliminate != nil {
+        // Mark player as eliminated
+        playerToEliminate.IsEliminated = true
+        activePlayers--
+
+        // Send elimination message
+        if playerToEliminate.Conn != nil {
+            playerToEliminate.Conn.WriteJSON(map[string]string{
                 "type": "player_eliminated",
                 "message": "You've been eliminated, better luck next time!",
             })
         }
 
-        // Remove eliminated player
-        newPlayers := make([]*Player, 0, len(game.Players)-1)
-        for _, p := range game.Players {
-            if p != eliminated {
-                newPlayers = append(newPlayers, p)
-            }
-        }
-        game.Players = newPlayers
-
-        // Check if game is over
-        if len(game.Players) == 1 {
+        // Check if game is over (only one active player remaining)
+        if activePlayers == 1 {
             isGameOver = true
-            winner = game.Players[0].Name
-            nextPlayer = 0
-        } else {
-            // Calculate next player index after elimination
-            nextPlayer = game.CurrentPlayer % len(game.Players)
         }
-    } else {
-        // Normal turn end - move to next player
-        nextPlayer = (game.CurrentPlayer + 1) % len(game.Players)
     }
 
-    // Update game state for next turn if game is not over
+    // Find next active player
     if !isGameOver {
+        nextPlayer = (game.CurrentPlayer + 1) % len(game.Players)
+        // Keep moving to next player until we find an active one
+        for game.Players[nextPlayer].IsEliminated {
+            nextPlayer = (nextPlayer + 1) % len(game.Players)
+        }
+
+        // Update game state for next turn
         game.LastSelection = ""
         game.LastCategory = ""
         game.RoundStarted = false
@@ -998,11 +1066,12 @@ func handleTimeExpiry(game *Game) {
 
     game.Mu.Unlock()
 
-    // Handle game end or broadcast state
+    // Always broadcast state first so UI can update
+    broadcastGameState(game)
+
+    // Handle game end if needed
     if isGameOver {
         handleGameEnded(game, fmt.Sprintf("Game over! Winner: %s", winner))
-    } else {
-        broadcastGameState(game)
     }
 }
 

@@ -140,6 +140,12 @@
         padding: 0.5rem;
         text-align: center;
       }
+      .player.eliminated {
+        opacity: 0.6;
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+        border: 1px solid #dee2e6;
+      }
       #player-status {
         background-color: #f8f9fa;
         border-radius: 0.25rem;
@@ -821,10 +827,14 @@
           game.players.forEach((player) => {
             let playerDiv = document.createElement("div")
             playerDiv.className = "player"
+            if (player.isEliminated) {
+              playerDiv.classList.add("eliminated")
+            }
 
             // Add player name
             let nameDiv = document.createElement("div")
-            nameDiv.textContent = player.name
+            nameDiv.textContent =
+              player.name + (player.isEliminated ? " (Eliminated)" : "")
             playerDiv.appendChild(nameDiv)
 
             // Add BOMB display
@@ -849,7 +859,9 @@
             currentPlayerName || ""
 
           // Handle timer and UI based on game state
-          let isCurrentPlayer = currentPlayerName === gameState.playerName
+          let isCurrentPlayer =
+            currentPlayerName === gameState.playerName &&
+            !game.players[game.currentPlayer].isEliminated
           // Only show countdown for current player
           countdownElement.classList.toggle("hidden", !isCurrentPlayer)
           if (isCurrentPlayer) {
