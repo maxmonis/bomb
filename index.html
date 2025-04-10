@@ -953,6 +953,12 @@
             (game.selectionRounds && game.selectionRounds.length > 0) ||
             game.selectionHistory.length > 0
           ) {
+            for (const round of game.selectionRounds ?? [])
+              for (const item of round) gameState.usedItems.add(item)
+
+            for (const item of game.selectionHistory ?? [])
+              gameState.usedItems.add(item)
+
             const chain = document.querySelector(".selection-chain")
             let html = ""
 
