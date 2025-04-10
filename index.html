@@ -777,6 +777,8 @@
               li.textContent = result
               const selectBtn = document.createElement("button")
               selectBtn.textContent = "Select"
+              // Disable the button if the item has been used before
+              selectBtn.disabled = gameState.usedItems.has(result)
               selectBtn.onclick = () => {
                 makeSelection(result, category)
                 // Clear search results after selection
@@ -809,9 +811,10 @@
           })
         )
 
-        // Update local state
+        // Update local state and track used selection
         gameState.lastSelection = selection
         gameState.lastCategory = category
+        gameState.usedItems.add(selection)
 
         // Set the opposite category for the next player
         const nextCategory = category === "movie" ? "actor" : "movie"
