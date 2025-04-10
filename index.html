@@ -382,23 +382,8 @@
 
       function handleWebSocketMessage(message) {
         switch (message.type) {
-          case "game_state":
-            // Stop any existing countdown before updating game state
-            stopLocalCountdown()
-            updateGameState(message.game)
-            break
-          case "game_ended":
-            // Stop countdown when game ends
-            stopLocalCountdown()
-            handleGameEnded(message)
-            break
           case "available_games":
             updateGamesList(message.games)
-            break
-          case "join_accepted":
-            // Remove pending message when accepted
-            document.getElementById("pending-message").classList.add("hidden")
-            document.getElementById("players-list").classList.remove("hidden")
             break
           case "error":
             if (message.message === "Game not found") {
@@ -418,6 +403,21 @@
               document.getElementById("game-area").classList.add("hidden")
               alert("Your join request was rejected")
             }
+            break
+          case "game_ended":
+            // Stop countdown when game ends
+            stopLocalCountdown()
+            handleGameEnded(message)
+            break
+          case "game_state":
+            // Stop any existing countdown before updating game state
+            stopLocalCountdown()
+            updateGameState(message.game)
+            break
+          case "join_accepted":
+            // Remove pending message when accepted
+            document.getElementById("pending-message").classList.add("hidden")
+            document.getElementById("players-list").classList.remove("hidden")
             break
         }
       }
