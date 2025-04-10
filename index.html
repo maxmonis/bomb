@@ -456,29 +456,19 @@
             currentPlayerName || ""
 
           // Handle timer and UI based on game state
-          if (game.inProgress) {
-            const isCurrentPlayer = currentPlayerName === gameState.playerName
-
+          const isCurrentPlayer = currentPlayerName === gameState.playerName
+          // Only show countdown for current player
+          countdownElement.classList.toggle("hidden", !isCurrentPlayer)
+          if (isCurrentPlayer) {
             if (game.timeLeft === 30) {
               // Fresh turn state
               countdownElement.textContent = "30"
-              if (isCurrentPlayer) {
-                startLocalCountdown()
-                searchWidgets.classList.remove("hidden")
-                searchBar.classList.remove("hidden")
-                searchButton.classList.remove("hidden")
-                document.getElementById("instruction-text").textContent =
-                  "Your turn! Search for a movie or actor"
-              } else {
-                stopLocalCountdown()
-                searchWidgets.classList.add("hidden")
-                searchBar.classList.add("hidden")
-                searchButton.classList.add("hidden")
-                searchResults.innerHTML = ""
-                document.getElementById(
-                  "instruction-text"
-                ).textContent = `${currentPlayerName} is thinking...`
-              }
+              startLocalCountdown()
+              searchWidgets.classList.remove("hidden")
+              searchBar.classList.remove("hidden")
+              searchButton.classList.remove("hidden")
+              document.getElementById("instruction-text").textContent =
+                "Your turn! Search for a movie or actor"
             } else if (game.timeLeft === 0) {
               // Time expired state
               stopLocalCountdown()
@@ -491,25 +481,22 @@
                 "Time's up!"
               document.getElementById("challenge").classList.add("hidden")
               document.getElementById("give-up").classList.add("hidden")
-            } else if (!isCurrentPlayer) {
-              // Not current player's turn
-              stopLocalCountdown()
-              searchWidgets.classList.add("hidden")
-              searchBar.classList.add("hidden")
-              searchButton.classList.add("hidden")
-              searchResults.innerHTML = ""
-              document.getElementById(
-                "instruction-text"
-              ).textContent = `${currentPlayerName} is thinking...`
             }
           } else {
+            // Not current player's turn
             stopLocalCountdown()
+            searchWidgets.classList.add("hidden")
+            searchBar.classList.add("hidden")
+            searchButton.classList.add("hidden")
+            searchResults.innerHTML = ""
+            document.getElementById(
+              "instruction-text"
+            ).textContent = `${currentPlayerName} is thinking...`
           }
 
           // Show/hide search widgets based on whether it's the current player's turn
-          const isCurrentPlayer = currentPlayerName === gameState.playerName
           if (isCurrentPlayer) {
-            searchWidgets.classList.remove("hidden")
+            searchWidgets.classList.toggle("hidden", !!game.lastCategory)
             searchBar.classList.remove("hidden")
             searchButton.classList.remove("hidden")
             document.getElementById("instruction-text").textContent =
