@@ -408,6 +408,12 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             for i, p := range game.Players {
                 if p.Name == player.Name {
                     p.Letters++
+                    // Start a new round since a player got a letter
+                    if len(game.SelectionHistory) > 0 {
+                        game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
+                    }
+                    game.SelectionHistory = make([]string, 0)
+                    game.IsNewRound = true
                     if p.Letters >= 4 {
                         // Remove player if they spell BOMB
                         game.Players = append(game.Players[:i], game.Players[i+1:]...)
@@ -438,7 +444,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         } else {
             game.Mu.Unlock()
         }
-    
+
     case "make_selection":
         var content struct {
             Selection string `json:"selection"`
@@ -468,8 +474,8 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                         // Start a new round since a player got a letter
                         if len(game.SelectionHistory) > 0 {
                             game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
-                            game.SelectionHistory = make([]string, 0)
                         }
+                        game.SelectionHistory = make([]string, 0)
                         game.IsNewRound = true
                         if p.Letters >= 4 {
                             // Remove challenger if they spell BOMB
@@ -493,8 +499,8 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
                         // Start a new round since a player got a letter
                         if len(game.SelectionHistory) > 0 {
                             game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
-                            game.SelectionHistory = make([]string, 0)
                         }
+                        game.SelectionHistory = make([]string, 0)
                         game.IsNewRound = true
                         if p.Letters >= 4 {
                             // Remove challenged player if they spell BOMB
@@ -920,8 +926,8 @@ func handleTimeExpiry(game *Game) {
             // Start a new round since a player got a letter
             if len(game.SelectionHistory) > 0 {
                 game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
-                game.SelectionHistory = make([]string, 0)
             }
+            game.SelectionHistory = make([]string, 0)
             game.IsNewRound = true
             // If player has spelled BOMB, remove them
             if p.Letters >= 4 {
