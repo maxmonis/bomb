@@ -62,51 +62,51 @@
         color: #c20817 !important;
       }
 
-      /* -------------------- Classes/IDs -------------------- */
+      /* -------------------- Classes -------------------- */
       .bomb-letter {
         color: #dee2e6;
         font-size: 1.5rem;
       }
-      #category {
+      .category {
         display: flex;
         flex-direction: column;
         gap: 0.25rem;
         margin-block: 0.25rem;
       }
-      #content {
+      .content {
         margin-inline: auto;
         max-width: 28rem;
         padding: 1.5rem 1rem;
       }
-      #countdown {
+      .countdown {
         font-size: 2rem;
       }
-      #create-game-form {
+      .create-game-form {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
       }
-      #game-area {
+      .game-area {
         display: flex;
         flex-direction: column;
         gap: 0.25rem;
       }
-      #games-list li,
-      #search-results li {
+      .games-list li,
+      .search-results li {
         align-items: center;
         display: flex;
         gap: 1rem;
         justify-content: space-between;
         padding-block: 0.25rem;
       }
-      #games-list li button {
+      .games-list li button {
         white-space: nowrap;
       }
       .join-buttons {
         display: flex;
         gap: 0.5rem;
       }
-      #join-game-form {
+      .join-game-form {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
@@ -122,15 +122,15 @@
       .join-request li div:last-child {
         display: flex;
       }
-      #join-requests {
+      .join-requests {
         margin-block: 0.5rem 1.5rem;
       }
-      #lobby {
+      .lobby {
         display: grid;
         gap: 1rem;
       }
-      #no-games,
-      #no-pending-players {
+      .no-games,
+      .no-pending-players {
         color: #495057;
         margin-block-start: 0.5rem;
       }
@@ -153,7 +153,7 @@
         border-radius: 0.25rem;
         border: 1px solid #dee2e6;
       }
-      #player-status {
+      .player-status {
         background-color: #f8f9fa;
         border-radius: 0.25rem;
         border: 1px solid #dee2e6;
@@ -167,24 +167,24 @@
         gap: 0.5rem;
         margin-block: 1rem;
       }
-      #site-name {
+      .site-name {
         font-weight: 700;
         margin-block-end: 1rem;
         text-align: center;
       }
-      #search-form {
+      .search-form {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
       }
-      #search-form input {
+      .search-form input {
         flex-grow: 1;
         width: 12rem;
       }
-      #search-form div {
+      .search-form div {
         display: flex;
       }
-      #search-results {
+      .search-results {
         display: grid;
         padding: 0.5rem 0.25rem;
       }
@@ -198,7 +198,7 @@
         color: #495057;
         padding-block: 0.5rem;
       }
-      #selection-history {
+      .selection-history {
         background-color: #f8f9fa;
         border-radius: 0.25rem;
         border: 1px solid #dee2e6;
@@ -216,72 +216,80 @@
         background-color: #e8f4ff;
         border-color: #007bff;
       }
-      #waiting-room {
+      .waiting-room {
         display: grid;
         gap: 0.5rem;
       }
     </style>
   </head>
   <body>
-    <div id="content">
-      <h1 id="site-name">BOMB</h1>
+    <div class="content">
+      <h1 class="site-name">BOMB</h1>
 
-      <div id="lobby" class="hidden">
-        <div id="available-games">
+      <div class="lobby hidden">
+        <div class="available-games">
           <h2>Available Games</h2>
-          <ul id="games-list"></ul>
-          <p id="no-games">No games available</p>
+          <ul class="games-list"></ul>
+          <p class="no-games">No games available</p>
         </div>
-        <form id="create-game-form">
+        <form class="create-game-form">
           <h2>Create New Game</h2>
-          <input type="text" id="creator-name" placeholder="Enter your name" />
+          <input
+            type="text"
+            class="creator-name"
+            placeholder="Enter your name"
+          />
           <button>Create Game</button>
         </form>
-        <form id="join-game-form" class="hidden">
+        <form class="join-game-form hidden">
           <h2>Join Game</h2>
-          <p>Game ID: <span id="join-game-id"></span></p>
-          <input type="text" id="player-name" placeholder="Enter your name" />
+          <p>Game ID: <span class="join-game-id"></span></p>
+          <input
+            type="text"
+            class="player-name"
+            placeholder="Enter your name"
+          />
           <textarea
             type="text"
-            id="join-message"
+            class="join-message"
             placeholder="Message to creator (optional)"
           ></textarea>
           <div class="join-buttons">
             <button type="submit">Join Game</button>
-            <button id="cancel-join" class="red" type="button">Cancel</button>
+            <button class="cancel-join red" type="button">Cancel</button>
           </div>
         </form>
       </div>
 
-      <div id="waiting-room" class="hidden">
+      <div class="waiting-room hidden">
         <h2>Waiting Room</h2>
-        <p>Game ID: <span id="game-id-display"></span></p>
-        <div id="waiting-for-admission" class="hidden pending-message">
+        <p>Game ID: <span class="game-id-display"></span></p>
+        <div class="waiting-for-admission hidden pending-message">
           <p>Waiting for the creator to admit you to the game...</p>
         </div>
         <div class="players">
           <h3>Players:</h3>
-          <p id="players-list"></p>
-          <p id="waiting-for-start" class="hidden pending-message">
+          <p class="players-list"></p>
+          <p class="waiting-for-start hidden pending-message">
             Waiting for the creator to start the game...
           </p>
         </div>
-        <div id="creator-controls" class="hidden">
+        <div class="creator-controls hidden">
           <h3>Pending Players:</h3>
-          <p id="no-pending-players">No pending players</p>
-          <div id="join-requests"></div>
-          <button id="start-game-btn" disabled>Start Game</button>
+          <p class="no-pending-players">No pending players</p>
+          <div class="join-requests"></div>
+          <button class="start-game-btn" disabled>Start Game</button>
         </div>
       </div>
 
-      <div class="hidden" id="player-status">
+      <div class="player-status hidden">
         <!-- Player statuses will be dynamically added here -->
       </div>
 
-      <div id="game-area" class="hidden">
-        <h2>Current Player: <span id="current-player"></span></h2>
-        <div id="countdown">30</div>
-        <div id="category">
+      <div class="game-area hidden">
+        <h2>Current Player: <span class="current-player"></span></h2>
+        <div class="countdown">30</div>
+        <div class="category">
           <label
             ><input type="radio" name="category" value="movie" checked />
             Movie</label
@@ -290,19 +298,19 @@
             ><input type="radio" name="category" value="actor" /> Actor</label
           >
         </div>
-        <p id="instruction-text"></p>
-        <form id="search-form" class="hidden">
-          <input type="text" id="search-bar" />
+        <p class="instruction-text"></p>
+        <form class="search-form hidden">
+          <input type="text" class="search-bar" />
           <div>
             <button type="submit">Search</button>
-            <button id="challenge" class="red hidden" type="button">
+            <button class="challenge red hidden" type="button">
               Challenge
             </button>
-            <button id="give-up" class="red hidden">Give Up</button>
+            <button class="give-up red hidden">Give Up</button>
           </div>
         </form>
-        <ul id="search-results"></ul>
-        <div id="selection-history">
+        <ul class="search-results"></ul>
+        <div class="selection-history">
           <h3>Rounds</h3>
           <div class="selection-chain"></div>
         </div>
@@ -342,27 +350,27 @@
       })
 
       document
-        .getElementById("create-game-form")
+        .querySelector(".create-game-form")
         .addEventListener("submit", createGame)
 
       document
-        .getElementById("join-game-form")
+        .querySelector(".join-game-form")
         .addEventListener("submit", joinGame)
 
       document
-        .getElementById("start-game-btn")
+        .querySelector(".start-game-btn")
         .addEventListener("click", startGame)
 
-      document.getElementById("search-form").addEventListener("submit", search)
+      document.querySelector(".search-form").addEventListener("submit", search)
 
-      document.getElementById("challenge").addEventListener("click", challenge)
+      document.querySelector(".challenge").addEventListener("click", challenge)
 
-      document.getElementById("give-up").addEventListener("click", giveUp)
+      document.querySelector(".give-up").addEventListener("click", giveUp)
 
-      document.getElementById("cancel-join").addEventListener("click", () => {
-        document.getElementById("join-game-form").classList.add("hidden")
-        document.getElementById("available-games").classList.remove("hidden")
-        document.getElementById("create-game-form").classList.remove("hidden")
+      document.querySelector(".cancel-join").addEventListener("click", () => {
+        document.querySelector(".join-game-form").classList.add("hidden")
+        document.querySelector(".available-games").classList.remove("hidden")
+        document.querySelector(".create-game-form").classList.remove("hidden")
       })
 
       // -------------------- Functions --------------------
@@ -439,7 +447,7 @@
       async function createGame(e) {
         e.preventDefault()
 
-        let creatorName = document.getElementById("creator-name").value.trim()
+        let creatorName = document.querySelector(".creator-name").value.trim()
         if (!creatorName) {
           alert("Please enter your name")
           return
@@ -460,9 +468,9 @@
         localStorage.setItem("gameId", gameState.id)
         localStorage.setItem("playerName", creatorName)
 
-        document.getElementById("game-id-display").textContent = gameState.id
-        document.getElementById("lobby").classList.add("hidden")
-        document.getElementById("waiting-room").classList.remove("hidden")
+        document.querySelector(".game-id-display").textContent = gameState.id
+        document.querySelector(".lobby").classList.add("hidden")
+        document.querySelector(".waiting-room").classList.remove("hidden")
 
         connectToGame(gameState.id, creatorName)
       }
@@ -511,9 +519,9 @@
           localStorage.removeItem("playerName")
           gameState.id = null
           gameState.playerName = null
-          document.getElementById("lobby").classList.remove("hidden")
-          document.getElementById("waiting-room").classList.add("hidden")
-          document.getElementById("game-area").classList.add("hidden")
+          document.querySelector(".lobby").classList.remove("hidden")
+          document.querySelector(".waiting-room").classList.add("hidden")
+          document.querySelector(".game-area").classList.add("hidden")
           alert("Unable to connect to game. Please try again.")
         }
       }
@@ -531,9 +539,9 @@
             // Clear game state and return to lobby
             localStorage.removeItem("gameId")
             localStorage.removeItem("playerName")
-            document.getElementById("lobby").classList.remove("hidden")
-            document.getElementById("waiting-room").classList.add("hidden")
-            document.getElementById("game-area").classList.add("hidden")
+            document.querySelector(".lobby").classList.remove("hidden")
+            document.querySelector(".waiting-room").classList.add("hidden")
+            document.querySelector(".game-area").classList.add("hidden")
             alert(message.message)
             break
           case "game_ended":
@@ -552,9 +560,9 @@
           case "join_accepted":
             // Remove pending message when accepted
             document
-              .getElementById("waiting-for-admission")
+              .querySelector(".waiting-for-admission")
               .classList.add("hidden")
-            document.getElementById("players-list").classList.remove("hidden")
+            document.querySelector(".players-list").classList.remove("hidden")
             break
           case "player_eliminated":
             alert(message.message)
@@ -565,9 +573,9 @@
       async function joinGame(e) {
         e.preventDefault()
 
-        let gameId = document.getElementById("join-game-id").textContent
-        let playerName = document.getElementById("player-name").value.trim()
-        let message = document.getElementById("join-message").value.trim()
+        let gameId = document.querySelector(".join-game-id").textContent
+        let playerName = document.querySelector(".player-name").value.trim()
+        let message = document.querySelector(".join-message").value.trim()
 
         if (!gameId || !playerName) {
           alert("Please enter your name")
@@ -591,9 +599,9 @@
           localStorage.setItem("playerName", playerName)
 
           // Show waiting room and hide lobby
-          document.getElementById("lobby").classList.add("hidden")
-          document.getElementById("waiting-room").classList.remove("hidden")
-          document.getElementById("game-id-display").textContent = gameId
+          document.querySelector(".lobby").classList.add("hidden")
+          document.querySelector(".waiting-room").classList.remove("hidden")
+          document.querySelector(".game-id-display").textContent = gameId
 
           // Connect to WebSocket after join request is accepted
           connectToGame(gameId, playerName)
@@ -630,7 +638,7 @@
         if (savedGameId) {
           reconnectToGame()
         } else {
-          document.getElementById("lobby").classList.remove("hidden")
+          document.querySelector(".lobby").classList.remove("hidden")
           connectToGame(null, null) // Connect without game ID for lobby updates
         }
       }
@@ -643,18 +651,18 @@
           gameState.id = gameId
           connectToGame(gameId, playerName, true)
 
-          document.getElementById("lobby").classList.add("hidden")
-          document.getElementById("waiting-room").classList.remove("hidden")
-          document.getElementById("game-id-display").textContent = gameId
+          document.querySelector(".lobby").classList.add("hidden")
+          document.querySelector(".waiting-room").classList.remove("hidden")
+          document.querySelector(".game-id-display").textContent = gameId
         } else {
-          document.getElementById("lobby").classList.remove("hidden")
+          document.querySelector(".lobby").classList.remove("hidden")
         }
       }
 
       async function search(e) {
         e.preventDefault()
 
-        let query = document.getElementById("search-bar").value.trim()
+        let query = document.querySelector(".search-bar").value.trim()
         if (!query) return
 
         let category = document.querySelector(
@@ -680,7 +688,7 @@
 
           let results = await response.json()
 
-          let resultsList = document.getElementById("search-results")
+          let resultsList = document.querySelector(".search-results")
           resultsList.innerHTML = ""
 
           if (!results || results.length === 0) {
@@ -699,7 +707,7 @@
               makeSelection(result, category)
               // Clear search results after selection
               resultsList.innerHTML = ""
-              document.getElementById("search-bar").value = ""
+              document.querySelector(".search-bar").value = ""
               // Update game state with the selection
               gameState.lastSelection = result
               gameState.lastCategory = category
@@ -711,7 +719,7 @@
           })
         } catch (error) {
           console.error("Search error:", error)
-          let resultsList = document.getElementById("search-results")
+          let resultsList = document.querySelector(".search-results")
           resultsList.innerHTML =
             "<li>Failed to fetch results. Please try again.</li>"
         }
@@ -729,7 +737,7 @@
         // Set initial state
         gameState.timeLeft = 30
         gameState.turnStartTime = Date.now()
-        let countdownElement = document.getElementById("countdown")
+        let countdownElement = document.querySelector(".countdown")
         countdownElement.textContent = gameState.timeLeft
 
         // Start local countdown
@@ -746,14 +754,14 @@
             // When time expires, notify server and wait for new game state
             ws.send(JSON.stringify({ type: "time_expired" }))
             // Update UI immediately to show time is up
-            document.getElementById("countdown").textContent = "0"
-            document.getElementById("instruction-text").textContent =
+            document.querySelector(".countdown").textContent = "0"
+            document.querySelector(".instruction-text").textContent =
               "Time's up!"
             // Hide all game controls immediately
-            document.getElementById("category").classList.add("hidden")
-            document.getElementById("search-form").classList.add("hidden")
-            document.getElementById("search-results").innerHTML = ""
-            document.getElementById("give-up").classList.add("hidden")
+            document.querySelector(".category").classList.add("hidden")
+            document.querySelector(".search-form").classList.add("hidden")
+            document.querySelector(".search-results").innerHTML = ""
+            document.querySelector(".give-up").classList.add("hidden")
           }
         }, 100) // Update more frequently for smoother display
       }
@@ -769,10 +777,10 @@
 
       function updateGamesList(gameIds) {
         gameIds ??= []
-        let gamesList = document.getElementById("games-list")
-        let joinGameSection = document.getElementById("join-game-form")
+        let gamesList = document.querySelector(".games-list")
+        let joinGameSection = document.querySelector(".join-game-form")
         document
-          .getElementById("no-games")
+          .querySelector(".no-games")
           .classList.toggle("hidden", gameIds.length > 0)
         gamesList.innerHTML = ""
         gameIds.forEach((gameId) => {
@@ -782,13 +790,13 @@
           joinButton.onclick = () => {
             // Show join game form
             joinGameSection.classList.remove("hidden")
-            document.getElementById("join-game-id").textContent = gameId
-            document.getElementById("player-name").focus()
-            document.getElementById("available-games").classList.add("hidden")
-            document.getElementById("create-game-form").classList.add("hidden")
+            document.querySelector(".join-game-id").textContent = gameId
+            document.querySelector(".player-name").focus()
+            document.querySelector(".available-games").classList.add("hidden")
+            document.querySelector(".create-game-form").classList.add("hidden")
             // Clear any previous values
-            document.getElementById("player-name").value = ""
-            document.getElementById("join-message").value = ""
+            document.querySelector(".player-name").value = ""
+            document.querySelector(".join-message").value = ""
           }
           li.textContent = gameId
           li.appendChild(joinButton)
@@ -797,17 +805,17 @@
       }
 
       function updateGameState(game) {
-        let statusDiv = document.getElementById("player-status")
-        let waitingRoom = document.getElementById("waiting-room")
-        let gameArea = document.getElementById("game-area")
-        let playersList = document.getElementById("players-list")
-        let creatorControls = document.getElementById("creator-controls")
-        let pendingMessage = document.getElementById("waiting-for-admission")
-        let searchWidgets = document.getElementById("category")
-        let searchForm = document.getElementById("search-form")
-        let searchResults = document.getElementById("search-results")
-        let countdownElement = document.getElementById("countdown")
-        let selectionHistory = document.getElementById("selection-history")
+        let statusDiv = document.querySelector(".player-status")
+        let waitingRoom = document.querySelector(".waiting-room")
+        let gameArea = document.querySelector(".game-area")
+        let playersList = document.querySelector(".players-list")
+        let creatorControls = document.querySelector(".creator-controls")
+        let pendingMessage = document.querySelector(".waiting-for-admission")
+        let searchWidgets = document.querySelector(".category")
+        let searchForm = document.querySelector(".search-form")
+        let searchResults = document.querySelector(".search-results")
+        let countdownElement = document.querySelector(".countdown")
+        let selectionHistory = document.querySelector(".selection-history")
         let selectionChain = document.querySelector(".selection-chain")
 
         // Update player list
@@ -832,7 +840,7 @@
 
         // Show "waiting for start" message when admitted but game not started
         document
-          .getElementById("waiting-for-start")
+          .querySelector(".waiting-for-start")
           .classList.toggle(
             "hidden",
             isPending || game.inProgress || gameState.isCreator
@@ -877,7 +885,7 @@
 
           // Update current player display
           let currentPlayerName = game.players[game.currentPlayer]?.name
-          document.getElementById("current-player").textContent =
+          document.querySelector(".current-player").textContent =
             currentPlayerName || ""
 
           // Handle timer and UI based on game state
@@ -895,7 +903,7 @@
               searchForm.classList.remove("hidden")
               let lastSelection = game.lastSelection
               let lastCategory = game.lastCategory
-              document.getElementById("instruction-text").textContent =
+              document.querySelector(".instruction-text").textContent =
                 lastSelection
                   ? lastCategory === "movie"
                     ? `Name an actor from ${lastSelection}`
@@ -908,10 +916,10 @@
               searchWidgets.classList.add("hidden")
               searchForm.classList.add("hidden")
               searchResults.innerHTML = ""
-              document.getElementById("instruction-text").textContent =
+              document.querySelector(".instruction-text").textContent =
                 "Time's up!"
-              document.getElementById("challenge").classList.add("hidden")
-              document.getElementById("give-up").classList.add("hidden")
+              document.querySelector(".challenge").classList.add("hidden")
+              document.querySelector(".give-up").classList.add("hidden")
             }
           } else {
             // Not current player's turn
@@ -919,8 +927,8 @@
             searchWidgets.classList.add("hidden")
             searchForm.classList.add("hidden")
             searchResults.innerHTML = ""
-            document.getElementById(
-              "instruction-text"
+            document.querySelector(
+              ".instruction-text"
             ).textContent = `${currentPlayerName} is thinking...`
           }
 
@@ -931,7 +939,7 @@
 
             let lastSelection = game.lastSelection
             let lastCategory = game.lastCategory
-            document.getElementById("instruction-text").textContent =
+            document.querySelector(".instruction-text").textContent =
               lastSelection
                 ? lastCategory === "movie"
                   ? `Name an actor from ${lastSelection}`
@@ -950,33 +958,30 @@
             searchWidgets.classList.add("hidden")
             searchForm.classList.add("hidden")
             searchResults.innerHTML = ""
-            document.getElementById(
-              "instruction-text"
+            document.querySelector(
+              ".instruction-text"
             ).textContent = `${currentPlayerName} is thinking...`
           }
 
           // Show/hide challenge button
-          let challengeBtn = document.getElementById("challenge")
-          let giveUpBtn = document.getElementById("give-up")
+          let challengeBtn = document.querySelector(".challenge")
+          let giveUpBtn = document.querySelector(".give-up")
 
           if (game.challengeState) {
+            let instructionText = document.querySelector(".instruction-text")
             challengeBtn.classList.add("hidden")
             if (game.challengeState.challengedName === gameState.playerName) {
               // Show give up button only to the challenged player
               giveUpBtn.classList.remove("hidden")
               let lastSelection = game.lastSelection
               let lastCategory = game.lastCategory
-              document.getElementById(
-                "instruction-text"
-              ).innerHTML = `You've been challenged!<br /> Name ${
+              instructionText.innerHTML = `You've been challenged!<br /> Name ${
                 lastCategory === "movie" ? "an actor from" : "a movie starring"
               } ${lastSelection}`
-              document.getElementById("search-form").classList.remove("hidden")
+              document.querySelector(".search-form").classList.remove("hidden")
             } else {
               giveUpBtn.classList.add("hidden")
-              document.getElementById(
-                "instruction-text"
-              ).textContent = `Waiting for ${game.challengeState.challengedName} to respond to the challenge...`
+              instructionText.textContent = `Waiting for ${game.challengeState.challengedName} to respond to the challenge...`
             }
           } else {
             giveUpBtn.classList.add("hidden")
@@ -1036,17 +1041,17 @@
 
             chain.innerHTML = html
             document
-              .getElementById("selection-history")
+              .querySelector(".selection-history")
               .classList.remove("hidden")
           } else {
-            document.getElementById("selection-history").classList.add("hidden")
+            document.querySelector(".selection-history").classList.add("hidden")
           }
         } else {
           // ... rest of the existing waiting room code ...
           statusDiv.classList.add("hidden")
           waitingRoom.classList.remove("hidden")
           gameArea.classList.add("hidden")
-          document.getElementById("game-id-display").textContent = game.id
+          document.querySelector(".game-id-display").textContent = game.id
 
           // Show/hide pending message
           if (isPending) {
@@ -1060,14 +1065,14 @@
           // Update creator controls
           if (gameState.isCreator) {
             creatorControls.classList.remove("hidden")
-            let requestsDiv = document.getElementById("join-requests")
+            let requestsDiv = document.querySelector(".join-requests")
             requestsDiv.innerHTML = ""
 
             // Make sure joinRequests exists and is an object
             if (game.joinRequests && typeof game.joinRequests === "object") {
               let requests = Object.entries(game.joinRequests)
               document
-                .getElementById("no-pending-players")
+                .querySelector(".no-pending-players")
                 .classList.toggle("hidden", requests.length > 0)
               requests.forEach(([name, request]) => {
                 let requestList = document.createElement("ul")
@@ -1095,7 +1100,7 @@
             }
 
             // Update start button - enable only if there are 2 or more players
-            let startButton = document.getElementById("start-game-btn")
+            let startButton = document.querySelector(".start-game-btn")
             startButton.disabled = game.players.length < 2
           } else {
             creatorControls.classList.add("hidden")
