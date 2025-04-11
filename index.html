@@ -256,7 +256,7 @@
           ></textarea>
           <div class="join-buttons">
             <button type="submit">Join Game</button>
-            <button class="cancel-join red" type="button">Cancel</button>
+            <button class="cancel-join-btn red" type="button">Cancel</button>
           </div>
         </form>
       </div>
@@ -303,7 +303,7 @@
           <input type="text" class="search-bar" />
           <div>
             <button type="submit">Search</button>
-            <button class="challenge red hidden" type="button">
+            <button class="challenge-btn red hidden" type="button">
               Challenge
             </button>
             <button class="give-up red hidden">Give Up</button>
@@ -354,21 +354,27 @@
 
       document.querySelector(".search-form").addEventListener("submit", search)
 
-      document.querySelector(".challenge").addEventListener("click", challenge)
+      document
+        .querySelector(".challenge-btn")
+        .addEventListener("click", challenge)
 
       document.querySelector(".give-up").addEventListener("click", giveUp)
 
-      document.querySelector(".cancel-join").addEventListener("click", () => {
-        document.querySelector(".join-game-form").classList.add("hidden")
-        document.querySelector(".available-games").classList.remove("hidden")
-        document.querySelector(".create-game-form").classList.remove("hidden")
-      })
+      document
+        .querySelector(".cancel-join-btn")
+        .addEventListener("click", cancelJoin)
 
       document
         .querySelector(".leave-game-btn")
         .addEventListener("click", leaveGame)
 
       // -------------------- Functions --------------------
+
+      function cancelJoin() {
+        document.querySelector(".join-game-form").classList.add("hidden")
+        document.querySelector(".available-games").classList.remove("hidden")
+        document.querySelector(".create-game-form").classList.remove("hidden")
+      }
 
       function challenge() {
         stopLocalCountdown()
@@ -920,7 +926,7 @@
               searchResults.innerHTML = ""
               document.querySelector(".instruction-text").textContent =
                 "Time's up!"
-              document.querySelector(".challenge").classList.add("hidden")
+              document.querySelector(".challenge-btn").classList.add("hidden")
               document.querySelector(".give-up").classList.add("hidden")
             }
           } else {
@@ -966,7 +972,7 @@
           }
 
           // Show/hide challenge button
-          let challengeBtn = document.querySelector(".challenge")
+          let challengeBtn = document.querySelector(".challenge-btn")
           let giveUpBtn = document.querySelector(".give-up")
 
           if (game.challengeState) {
