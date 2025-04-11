@@ -1106,7 +1106,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/", serveHome)
-    http.HandleFunc("/static/", serveStatic)
+    http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/create-game", handleCreateGame)
 	http.HandleFunc("/join-game", handleJoinGame)
@@ -1123,10 +1123,6 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, "index.html")
-}
-
-func serveStatic(w http.ResponseWriter, r *http.Request) {
-    http.ServeFile(w, r, r.URL.Path[1:])
 }
 
 func startTimer(game *Game) {
