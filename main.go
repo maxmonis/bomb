@@ -902,6 +902,7 @@ func handleTimeExpiry(game *Game) {
                 // If player has spelled BOMB, mark them for elimination
                 if p.Letters >= 4 {
                     playerToEliminate = p
+                    p.IsEliminated = true
                 }
             }
             break
@@ -918,10 +919,6 @@ func handleTimeExpiry(game *Game) {
 
     // Handle elimination if needed
     if playerToEliminate != nil {
-        // Mark player as eliminated
-        playerToEliminate.IsEliminated = true
-        activePlayers--
-
         // Send elimination message
         if playerToEliminate.Conn != nil {
             playerToEliminate.Conn.WriteJSON(map[string]string{
@@ -964,7 +961,7 @@ func handleTimeExpiry(game *Game) {
 
     // Handle game end if needed
     if isGameOver {
-        handleGameEnded(game, fmt.Sprintf("Game over! Winner: %s", winner))
+        handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
     }
 }
 
