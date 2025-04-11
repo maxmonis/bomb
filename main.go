@@ -769,7 +769,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
     }
 
     encodedQuery := url.QueryEscape(query)
-    searchUrl := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=%s", encodedQuery)
+    searchUrl := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&format=json&list=search&origin=*&srsearch=%s", encodedQuery)
     resp, err := http.Get(searchUrl)
     if (err != nil) {
         log.Printf("Failed to fetch data from Wikimedia API: %v\n", err)
@@ -791,23 +791,28 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    var data []interface{}
+    // The response is a JSON object with a "query" field which is a dict
+    // with a "search" props which includes a list of dicts, each of which
+    // has a "title" field. The "search" field may also be null.
+    var data map[string]interface{}
     if err := json.Unmarshal(body, &data); err != nil {
-        log.Printf("Failed to parse JSON response: %v\n", err)
-        http.Error(w, "Failed to parse JSON response", http.StatusInternalServerError)
+        log.Printf("Failed to unmarshal response body: %v\n", err)
+        http.Error(w, "Failed to unmarshal response body", http.StatusInternalServerError)
         return
     }
 
-    results, ok := data[1].([]interface{})
-    if !ok {
-        log.Println("Unexpected response format from Wikimedia API")
-        http.Error(w, "Unexpected response format", http.StatusInternalServerError)
+    if data["query"].(map[string]interface{})["search"] == nil {
+        // return an empty list
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode([]string{})
         return
     }
 
+    // Get the titles of the search results
     var titles []string
-    for _, result := range results {
-        titles = append(titles, result.(string))
+    for _, result := range data["query"].(map[string]interface{})["search"].([]interface{}) {
+        title := result.(map[string]interface{})["title"].(string)
+        titles = append(titles, title)
     }
 
     // Fetch revisions for the titles
