@@ -2,7 +2,7 @@
 
 ### Description
 
-This is a game for 2-4 players. There are no logins, so to start gameplay the user simply selects how many players will participate and chooses a name for each player.
+This is an online game for two or more players. There are no logins, so to start gameplay a user simply needs to provide a name to create a game or join an existing one (game join requests are sent to the creator and must be approved). Games cannot be joined once in progress. If any player leaves during gameplay, the game ends.
 
 ### Gameplay
 
@@ -10,16 +10,32 @@ Each turn can take a maximum of 30 seconds, and a countdown is displayed on the 
 
 The first player selects either a movie or an actor, using the search bar.
 
-Once they've made a selection, play continues and player 2 must select. If the previous selection was a movie, they must name an actor who appeared in that movie. If the previous selection was an actor, they must name a movie in which that actor played. Gameplay continues this way.
+Once they've made a selection, it's player 2's turn. If the previous selection was a movie, they must name an actor who appeared in that movie. If the previous selection was an actor, they must name a movie in which that actor appeared. Gameplay continues this way.
 
-If a player runs out of time or clicks the "Challenge" button, the previous player must make a selection. If their selection is valid (meaning movie and actor match), the challenging player receives a letter (the letters a B, O, M, and B, in that order). If the selection is invalid or they run out of time, the challenged player receives a letter.
+If a player runs out of time, they receive a letter (the letters are B, O, M, and B, in that order). If a player clicks the "Challenge" button, the previous player must make a selection. If their selection is valid (meaning movie and actor match), the challenging player receives a letter. If the selection is invalid or they give up or run out of time, the challenged player receives a letter.
 
-Players are eliminated if they've spelled out BOMB. The final player who was not eliminated is the winner.
+A new round begins whenever a player gets a letter. All rounds of gameplay are displayed on the screen. Actors and movies cannot be reused at any time.
 
-A list of actors and a list of movies is displayed on the screen. Actors and movies cannot be reused at any time.
+Players are eliminated once they've spelled out BOMB. The final player who was not eliminated is the winner.
 
 ### Technical Overview
 
-The first iteration only allowed local play on a single device.
+This is a simple Go server with a frontend written in HTML, CSS, and JavaScript. It uses web sockets to keep track of the game state. There's no database.
 
-The new iteration is a web app which allows users to play online. There is no database, so the game state is kept in the server. Users can join a game, and the game state is synchronized across all users in the game using web sockets. No account creation is required, any user can create a game and select their name as they'd like it to appear. Games can be started once at least two players have joined, and the creator decides when to start the game. When players request to join a game, they choose their name and can optionally send a message to the creator. The creator decides whether to admit them or not. Games cannot be joined once in progress. If the creator leaves, the game ends. Games cannot be stopped and started, but we do keep track of the current game's ID using local storage in case a user refreshes the page.
+### Development
+
+To start the dev server, run:
+
+```bash
+go run main.go
+```
+
+You'll need to manually stop and restart the server if you make changes.
+
+### Deployment
+
+To deploy on Fly.io using the Dockerfile, run:
+
+```bash
+flyctl deploy
+```
