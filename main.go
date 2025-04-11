@@ -78,8 +78,11 @@ var (
 func broadcastAvailableGames() {
 	gamesMutex.Lock()
 	var gameList []string
-	for gameID := range games {
-		gameList = append(gameList, gameID)
+	for gameID, game := range games {
+		// Only include games that are not in progress
+		if (!game.InProgress) {
+			gameList = append(gameList, gameID)
+		}
 	}
 	gamesMutex.Unlock()
 
@@ -694,6 +697,7 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             game.CurrentPlayer = 0  // Start with the first player
             game.Mu.Unlock()
             broadcastGameState(game)
+            broadcastAvailableGames() // Add broadcast to update lobby
             startTimer(game) // Start timer for first player
         } else {
             game.Mu.Unlock()
@@ -732,10 +736,13 @@ func handleGetGames(w http.ResponseWriter, r *http.Request) {
 	}
 	var gameList []GameInfo
 	for gameID, game := range games {
-		gameList = append(gameList, GameInfo{
-			ID:        gameID,
-			CreatorID: game.CreatorID,
-		})
+		// Only include games that are not in progress
+		if (!game.InProgress) {
+			gameList = append(gameList, GameInfo{
+				ID:        gameID,
+				CreatorID: game.CreatorID,
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
