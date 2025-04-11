@@ -266,32 +266,22 @@ func handleCreateGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGameEnded(game *Game, message string) {
+    // Stop the timer
+    game.Timer.Stop()
     game.Mu.Lock()
     // Make a copy of players to notify while holding the lock
     players := make([]*Player, len(game.Players))
     copy(players, game.Players)
     
-    // Clean up game state
-    gameID := game.ID
-    game.Mu.Unlock()
-    
-    // Remove game from global state before notifications
-    gamesMutex.Lock()
-    delete(games, gameID)
-    gamesMutex.Unlock()
-    
-    // Notify all players after releasing locks
+    // Notify all players
     for _, p := range players {
         if p.Conn != nil {
             p.Conn.WriteJSON(map[string]string{
-                "type": "game_ended",
+                "type": "winner_announced",
                 "message": message,
             })
         }
     }
-    
-    // Broadcast updated game list to lobby
-    broadcastAvailableGames()
 }
 
 func handleGameMessage(game *Game, player *Player, msg GameMessage) {

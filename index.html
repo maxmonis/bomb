@@ -223,6 +223,15 @@
         display: grid;
         gap: 0.5rem;
       }
+      .winner-banner {
+        background-color: #28a745;
+        border-radius: 0.25rem;
+        color: white;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        padding: 0.5rem;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
@@ -291,7 +300,7 @@
       </div>
 
       <div class="game-area hidden">
-        <h2>Current Player: <span class="current-player"></span></h2>
+        <h2 class="current-player">Current Player: <span></span></h2>
         <div class="countdown">30</div>
         <div class="category">
           <label
@@ -571,6 +580,16 @@
             break
           case "player_eliminated":
             alert(message.message)
+            break
+          case "winner_announced":
+            const winnerBanner = document.querySelector(".current-player")
+            winnerBanner.innerHTML = message.message
+            winnerBanner.classList.add("winner-banner")
+            document.querySelector(".player-status").classList.add("hidden")
+            document.querySelector(".countdown").classList.add("hidden")
+            document.querySelector(".instruction-text").classList.add("hidden")
+            document.querySelector(".search-form").classList.add("hidden")
+            stopLocalCountdown()
             break
         }
       }
@@ -897,7 +916,7 @@
 
           // Update current player display
           let currentPlayerName = game.players[game.currentPlayer]?.name
-          document.querySelector(".current-player").textContent =
+          document.querySelector(".current-player span").textContent =
             currentPlayerName || ""
 
           // Handle timer and UI based on game state
