@@ -398,7 +398,7 @@
 
       function connectToGame(gameId, playerName, isReconnect = false) {
         try {
-          ws = new WebSocket(`ws://${window.location.host}/ws`, ["websocket"])
+          ws = getWebSocket()
 
           ws.onopen = () => {
             // Reset reconnection attempts on successful connection
@@ -440,9 +440,7 @@
       }
 
       function connectToLobby() {
-        let wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-        let wsUrl = `${wsProtocol}//${window.location.host}/ws`
-        let socket = new WebSocket(wsUrl)
+        let socket = getWebSocket()
 
         socket.onopen = () => {
           socket.send(JSON.stringify({ type: "lobby" }))
@@ -485,6 +483,12 @@
         document.querySelector(".waiting-room").classList.remove("hidden")
 
         connectToGame(gameState.id, creatorName)
+      }
+
+      function getWebSocket() {
+        let wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+        let wsUrl = `${wsProtocol}//${window.location.host}/ws`
+        return new WebSocket(wsUrl)
       }
 
       function giveUp() {
