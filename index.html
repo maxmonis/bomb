@@ -116,6 +116,7 @@
         gap: 0.5rem;
       }
       .join-request li {
+        align-items: center;
         display: flex;
         justify-content: space-between;
       }
@@ -123,6 +124,8 @@
         display: flex;
       }
       .join-requests {
+        display: grid;
+        gap: 0.25rem;
         margin-block: 0.5rem 1.5rem;
       }
       .lobby {
@@ -235,6 +238,7 @@
         <form class="create-game-form">
           <h2>Create New Game</h2>
           <input
+            autofocus
             type="text"
             class="creator-name"
             placeholder="Enter your name"
