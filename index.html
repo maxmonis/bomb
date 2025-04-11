@@ -478,10 +478,6 @@
         gameState.isCreator = true
         gameState.playerName = creatorName
 
-        // Save to localStorage
-        localStorage.setItem("gameId", gameState.id)
-        localStorage.setItem("playerName", creatorName)
-
         document.querySelector(".game-id-display").textContent = gameState.id
         document.querySelector(".lobby").classList.add("hidden")
         document.querySelector(".waiting-room").classList.remove("hidden")
@@ -496,8 +492,6 @@
 
       function handleGameEnded(message) {
         alert(message.message)
-        localStorage.removeItem("gameId")
-        localStorage.removeItem("playerName")
         location.reload()
       }
 
@@ -529,8 +523,6 @@
           gameState.reconnectAttempts >= gameState.maxReconnectAttempts
         ) {
           // If we've exceeded max attempts, clear game state and return to lobby
-          localStorage.removeItem("gameId")
-          localStorage.removeItem("playerName")
           gameState.id = null
           gameState.playerName = null
           document.querySelector(".lobby").classList.remove("hidden")
@@ -551,8 +543,6 @@
               gameState.shouldReconnect = false
 
             // Clear game state and return to lobby
-            localStorage.removeItem("gameId")
-            localStorage.removeItem("playerName")
             document.querySelector(".lobby").classList.remove("hidden")
             document.querySelector(".waiting-room").classList.add("hidden")
             document.querySelector(".game-area").classList.add("hidden")
@@ -618,10 +608,6 @@
             throw new Error(error)
           }
 
-          // Save to localStorage
-          localStorage.setItem("gameId", gameId)
-          localStorage.setItem("playerName", playerName)
-
           // Show waiting room and hide lobby
           document.querySelector(".lobby").classList.add("hidden")
           document.querySelector(".waiting-room").classList.remove("hidden")
@@ -636,9 +622,7 @@
 
       function leaveGame() {
         confirm("Leave game? This will end the game for all players") &&
-          (localStorage.removeItem("gameId"),
-          localStorage.removeItem("playerName"),
-          location.reload())
+          location.reload()
       }
 
       function makeSelection(selection, category) {
@@ -665,19 +649,13 @@
 
       function onLoad() {
         connectToLobby()
-        let savedGameId = localStorage.getItem("gameId")
-        if (savedGameId) {
-          reconnectToGame()
-        } else {
-          document.querySelector(".lobby").classList.remove("hidden")
-          connectToGame(null, null) // Connect without game ID for lobby updates
-        }
-      }
-
-      function reconnectToGame() {
-        let playerName = localStorage.getItem("playerName")
-        let gameId = localStorage.getItem("gameId")
-        if (playerName && gameId) {
+        let gameId =
+          gameState.id ||
+          document.querySelector(".game-id-display").textContent ||
+          document.querySelector(".join-game-id").textContent
+        let playerName =
+          gameState.playerName || document.querySelector(".player-name").value
+        if (gameId && playerName) {
           gameState.playerName = playerName
           gameState.id = gameId
           connectToGame(gameId, playerName, true)
@@ -687,6 +665,7 @@
           document.querySelector(".game-id-display").textContent = gameId
         } else {
           document.querySelector(".lobby").classList.remove("hidden")
+          connectToGame(null, null) // Connect without game ID for lobby updates
         }
       }
 
