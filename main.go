@@ -1105,8 +1105,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", serveHome)
     http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/create-game", handleCreateGame)
 	http.HandleFunc("/join-game", handleJoinGame)
