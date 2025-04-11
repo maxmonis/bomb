@@ -353,6 +353,8 @@
 
       window.addEventListener("load", onLoad)
 
+      window.addEventListener("beforeunload", onBeforeUnload)
+
       document
         .querySelector(".create-game-form")
         .addEventListener("submit", createGame)
@@ -548,6 +550,13 @@
             document.querySelector(".game-area").classList.add("hidden")
             alert(message.message)
             break
+          case "game_deleted":
+            // Clear game state and return to lobby
+            document.querySelector(".lobby").classList.remove("hidden")
+            document.querySelector(".waiting-room").classList.add("hidden")
+            document.querySelector(".game-area").classList.add("hidden")
+            alert("The game has been deleted")
+            break
           case "game_ended":
             // Stop countdown when game ends
             stopLocalCountdown()
@@ -645,6 +654,23 @@
         document.querySelector(
           `input[name="category"][value="${nextCategory}"]`
         ).checked = true
+      }
+
+      function onBeforeUnload() {
+        if (!gameState.id) return
+        if (gameState.isCreator)
+          ws.send(
+            JSON.stringify({
+              type: "delete_game",
+            })
+          )
+        else
+          ws.send(
+            JSON.stringify({
+              content: { name: gameState.playerName },
+              type: "remove_player",
+            })
+          )
       }
 
       function onLoad() {

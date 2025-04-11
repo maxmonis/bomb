@@ -363,6 +363,21 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         }
         game.Mu.Unlock()
 
+    case "delete_game":
+        gamesMutex.Lock()
+        delete(games, game.ID)
+        gamesMutex.Unlock()
+        broadcastAvailableGames()
+        // broadcast ID of deleted game to all players
+        for _, p := range game.Players {
+            if p.Conn != nil {
+                p.Conn.WriteJSON(map[string]string{
+                    "type": "game_deleted",
+                    "gameId": game.ID,
+                })
+            }
+        }
+
     case "give_up":
         game.Mu.Lock()
         if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
@@ -568,6 +583,34 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
             }
         }
         game.Mu.Unlock()
+
+    case "remove_player":
+        var content struct {
+            PlayerName string `json:"name"`
+        }
+        if err := json.Unmarshal(msg.Content, &content); err != nil {
+            log.Printf("Error unmarshaling remove player: %v", err)
+            return
+        }
+        
+        game.Mu.Lock()
+        
+        // if the game has started, mark the player as eliminated
+        if game.InProgress {
+            for i, p := range game.Players {
+                if p.Name == content.PlayerName {
+                    game.Players[i].IsEliminated = true
+                    break
+                }
+            }
+        }
+        // otherwise, remove the player from the join requests
+        if game.JoinRequests != nil {
+            delete(game.JoinRequests, content.PlayerName)
+        }
+
+        game.Mu.Unlock()
+        broadcastGameState(game)
 
     case "start_game":
         game.Mu.Lock()
