@@ -1,14 +1,10 @@
-ARG GO_VERSION=1
-FROM golang:${GO_VERSION}-bookworm as builder
-
-WORKDIR /usr/src/app
-COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+FROM golang:1.23.1 AS builder
+WORKDIR /app
 COPY . .
-RUN go build -v -o /run-app .
+RUN go mod init bomb || true
+RUN go build -o main .
 
-
-FROM debian:bookworm
-
-COPY --from=builder /run-app /usr/local/bin/
-CMD ["run-app"]
+FROM gcr.io/distroless/base
+COPY --from=builder /app/main /
+COPY --from=builder /app/index.html /
+CMD ["/main"]
