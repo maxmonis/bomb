@@ -314,6 +314,7 @@
           <h3>Rounds</h3>
           <div class="selection-chain"></div>
         </div>
+        <button class="leave-game-btn red">Leave Game</button>
       </div>
     </div>
 
@@ -339,16 +340,6 @@
 
       window.addEventListener("load", onLoad)
 
-      // Add warning when trying to leave or reload during a game
-      window.addEventListener("beforeunload", (e) => {
-        if (gameState.inProgress) {
-          e.preventDefault()
-          e.returnValue =
-            "Leaving or reloading will end the game for all players. Are you sure?"
-          return e.returnValue
-        }
-      })
-
       document
         .querySelector(".create-game-form")
         .addEventListener("submit", createGame)
@@ -372,6 +363,10 @@
         document.querySelector(".available-games").classList.remove("hidden")
         document.querySelector(".create-game-form").classList.remove("hidden")
       })
+
+      document
+        .querySelector(".leave-game-btn")
+        .addEventListener("click", leaveGame)
 
       // -------------------- Functions --------------------
 
@@ -608,6 +603,13 @@
         } catch (error) {
           alert(error.message)
         }
+      }
+
+      function leaveGame() {
+        confirm("Leave game? This will end the game for all players") &&
+          (localStorage.removeItem("gameId"),
+          localStorage.removeItem("playerName"),
+          location.reload())
       }
 
       function makeSelection(selection, category) {
