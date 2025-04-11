@@ -257,7 +257,7 @@
     <div class="content">
       <h1 class="site-name">BOMB</h1>
 
-      <div class="lobby hidden">
+      <div class="lobby">
         <div class="available-games">
           <h2>Available Games</h2>
           <ul class="games-list"></ul>
@@ -497,8 +497,8 @@
         gameState.isCreator = true
         gameState.playerName = creatorName
 
-        document.querySelector(".game-id-display").textContent = gameState.id
         document.querySelector(".lobby").classList.add("hidden")
+        document.querySelector(".game-id-display").textContent = gameState.id
         document.querySelector(".waiting-room").classList.remove("hidden")
 
         connectToGame(gameState.id, creatorName)
@@ -548,11 +548,7 @@
           gameState.reconnectAttempts >= gameState.maxReconnectAttempts
         ) {
           // If we've exceeded max attempts, clear game state and return to lobby
-          gameState.id = null
-          gameState.playerName = null
-          document.querySelector(".lobby").classList.remove("hidden")
-          document.querySelector(".waiting-room").classList.add("hidden")
-          document.querySelector(".game-area").classList.add("hidden")
+          returnToLobby()
           alert("Unable to connect to game. Please try again.")
         }
       }
@@ -568,16 +564,12 @@
               gameState.shouldReconnect = false
 
             // Clear game state and return to lobby
-            document.querySelector(".lobby").classList.remove("hidden")
-            document.querySelector(".waiting-room").classList.add("hidden")
-            document.querySelector(".game-area").classList.add("hidden")
+            returnToLobby()
             alert(message.message)
             break
           case "game_deleted":
             // Clear game state and return to lobby
-            document.querySelector(".lobby").classList.remove("hidden")
-            document.querySelector(".waiting-room").classList.add("hidden")
-            document.querySelector(".game-area").classList.add("hidden")
+            returnToLobby()
             alert("The game has been deleted")
             break
           case "game_ended":
@@ -667,7 +659,7 @@
           })
         )
 
-        // Update local state and track used selection
+        // Update local state and add selection to used items
         gameState.lastSelection = selection
         gameState.lastCategory = category
         gameState.usedItems.add(selection)
@@ -682,11 +674,7 @@
       function onBeforeUnload() {
         if (!gameState.id) return
         if (gameState.isCreator)
-          ws.send(
-            JSON.stringify({
-              type: "delete_game",
-            })
-          )
+          ws.send(JSON.stringify({ type: "delete_game" }))
         else
           ws.send(
             JSON.stringify({
@@ -718,6 +706,14 @@
         }
       }
 
+      function returnToLobby() {
+        gameState.id = null
+        gameState.playerName = null
+        document.querySelector(".waiting-room").classList.add("hidden")
+        document.querySelector(".game-area").classList.add("hidden")
+        document.querySelector(".lobby").classList.remove("hidden")
+      }
+
       async function search(e) {
         e.preventDefault()
 
@@ -729,21 +725,16 @@
         )?.value
 
         try {
-          let params = new URLSearchParams({
-            query,
-            category,
-          })
+          let params = new URLSearchParams({ category, query })
 
           // Add lastSelection if it exists
-          if (gameState.lastSelection) {
+          if (gameState.lastSelection)
             params.append("lastSelection", gameState.lastSelection)
-          }
 
           let response = await fetch(`/search?${params}`)
 
-          if (!response.ok) {
+          if (!response.ok)
             throw new Error(`HTTP error! status: ${response.status}`)
-          }
 
           let results = await response.json()
 
@@ -1045,15 +1036,12 @@
           } else {
             giveUpBtn.classList.add("hidden")
             // Only show challenge button if there's a last selection and it's the current player's turn
-            if (
-              currentPlayerName === gameState.playerName &&
-              game.lastSelection &&
-              game.roundStarted
-            ) {
-              challengeBtn.classList.remove("hidden")
-            } else {
-              challengeBtn.classList.add("hidden")
-            }
+            challengeBtn.classList.toggle(
+              "hidden",
+              currentPlayerName !== gameState.playerName ||
+                !game.lastSelection ||
+                !game.roundStarted
+            )
           }
 
           // Update selection history
@@ -1082,7 +1070,7 @@
               html += "</div>"
             }
 
-            // Show completed rounds
+            // Show completed rounds if any exist
             if (game.selectionRounds && game.selectionRounds.length > 0) {
               game.selectionRounds.reverse().forEach((round, roundIndex) => {
                 html += `<div class="selection-round">Round ${
