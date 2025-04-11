@@ -205,63 +205,6 @@ func broadcastGameState(game *Game) {
     }
 }
 
-func checkActorPage(actorName, movieTitle string) bool {
-    actorURL := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&format=json&titles=%s", url.QueryEscape(actorName))
-    actorResp, err := http.Get(actorURL)
-    if err != nil {
-        log.Printf("Error fetching actor data: %v", err)
-        return false
-    }
-    defer actorResp.Body.Close()
-
-    var actorData map[string]interface{}
-    if err := json.NewDecoder(actorResp.Body).Decode(&actorData); err != nil {
-        log.Printf("Error decoding actor data: %v", err)
-        return false
-    }
-
-    content := extractWikiContent(actorData)
-    return searchForConnection(content, movieTitle, []string{"filmography", "films", "movies"})
-}
-
-func checkMoviePage(movieTitle, actorName string) bool {
-    movieURL := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&format=json&titles=%s", url.QueryEscape(movieTitle))
-    movieResp, err := http.Get(movieURL)
-    if err != nil {
-        log.Printf("Error fetching movie data: %v", err)
-        return false
-    }
-    defer movieResp.Body.Close()
-
-    var movieData map[string]interface{}
-    if err := json.NewDecoder(movieResp.Body).Decode(&movieData); err != nil {
-        log.Printf("Error decoding movie data: %v", err)
-        return false
-    }
-
-    content := extractWikiContent(movieData)
-    return searchForConnection(content, actorName, []string{"starring", "cast"})
-}
-
-func extractWikiContent(data map[string]interface{}) string {
-    if query, ok := data["query"].(map[string]interface{}); ok {
-        if pages, ok := query["pages"].(map[string]interface{}); ok {
-            for _, page := range pages {
-                if pagemap, ok := page.(map[string]interface{}); ok {
-                    if revisions, ok := pagemap["revisions"].([]interface{}); ok && len(revisions) > 0 {
-                        if revision, ok := revisions[0].(map[string]interface{}); ok {
-                            if content, ok := revision["*"].(string); ok {
-                                return content
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return ""
-}
-
 func handleConnection(conn *websocket.Conn, game *Game, player *Player) {
     defer conn.Close()
 
@@ -510,99 +453,54 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         
         // Check if this is a challenge response or normal turn
         if game.ChallengeState != nil && game.ChallengeState.ChallengedName == player.Name {
-            isValid := validateSelection(game, content.Selection, content.Category)
+            // Challenge failed, add letter to challenger and add valid selection to history
+            game.SelectionHistory = append(game.SelectionHistory, content.Selection)
+            game.LastSelection = content.Selection
+            game.LastCategory = content.Category
+            game.UsedItems[content.Selection] = true
             
-            if isValid {
-                // Challenge failed, add letter to challenger and add valid selection to history
-                game.SelectionHistory = append(game.SelectionHistory, content.Selection)
-                game.LastSelection = content.Selection
-                game.LastCategory = content.Category
-                game.UsedItems[content.Selection] = true
-                
-                var activePlayers int
-                var winner string
-                
-                // Add letter to challenger
-                for _, p := range game.Players {
-                    if p.Name == game.ChallengeState.ChallengerName {
-                        p.Letters++
-                        // Start a new round since a player got a letter
-                        if len(game.SelectionHistory) > 0 {
-                            game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
-                        }
-                        game.SelectionHistory = make([]string, 0)
-                        game.IsNewRound = true
-                        if p.Letters >= 4 {
-                            // Mark challenger as eliminated
-                            p.IsEliminated = true
-                            // Send elimination notification
-                            if p.Conn != nil {
-                                p.Conn.WriteJSON(map[string]string{
-                                    "type": "player_eliminated",
-                                    "message": "You've been eliminated, better luck next time!",
-                                })
-                            }
-                        }
-                        break
+            var activePlayers int
+            var winner string
+            
+            // Add letter to challenger
+            for _, p := range game.Players {
+                if p.Name == game.ChallengeState.ChallengerName {
+                    p.Letters++
+                    // Start a new round since a player got a letter
+                    if len(game.SelectionHistory) > 0 {
+                        game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
                     }
-                }
-
-                // Count active players and find potential winner
-                for _, p := range game.Players {
-                    if !p.IsEliminated {
-                        activePlayers++
-                        winner = p.Name
-                    }
-                }
-
-                if activePlayers == 1 {
-                    game.Mu.Unlock()
-                    handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
-                    return
-                }
-            } else {
-                // Challenge succeeded, add letter to challenged player
-                var activePlayers int
-                var winner string
-                
-                for _, p := range game.Players {
-                    if p.Name == player.Name {
-                        p.Letters++
-                        // Start a new round since a player got a letter
-                        if len(game.SelectionHistory) > 0 {
-                            game.SelectionRounds = append(game.SelectionRounds, game.SelectionHistory)
+                    game.SelectionHistory = make([]string, 0)
+                    game.IsNewRound = true
+                    if p.Letters >= 4 {
+                        // Mark challenger as eliminated
+                        p.IsEliminated = true
+                        // Send elimination notification
+                        if p.Conn != nil {
+                            p.Conn.WriteJSON(map[string]string{
+                                "type": "player_eliminated",
+                                "message": "You've been eliminated, better luck next time!",
+                            })
                         }
-                        game.SelectionHistory = make([]string, 0)
-                        game.IsNewRound = true
-                        if p.Letters >= 4 {
-                            // Mark player as eliminated
-                            p.IsEliminated = true
-                            // Send elimination notification
-                            if p.Conn != nil {
-                                p.Conn.WriteJSON(map[string]string{
-                                    "type": "player_eliminated",
-                                    "message": "You've been eliminated, better luck next time!",
-                                })
-                            }
-                        }
-                        break
                     }
-                }
-
-                // Count active players and find potential winner
-                for _, p := range game.Players {
-                    if !p.IsEliminated {
-                        activePlayers++
-                        winner = p.Name
-                    }
-                }
-
-                if activePlayers == 1 {
-                    game.Mu.Unlock()
-                    handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
-                    return
+                    break
                 }
             }
+
+            // Count active players and find potential winner
+            for _, p := range game.Players {
+                if !p.IsEliminated {
+                    activePlayers++
+                    winner = p.Name
+                }
+            }
+
+            if activePlayers == 1 {
+                game.Mu.Unlock()
+                handleGameEnded(game, fmt.Sprintf("%s wins!", winner))
+                return
+            }
+
             
             // Reset game state for next round
             game.ChallengeState = nil
@@ -626,33 +524,24 @@ func handleGameMessage(game *Game, player *Player, msg GameMessage) {
         
         // Normal turn handling
         if game.Players[game.CurrentPlayer].Name == player.Name && game.ChallengeState == nil {
-            validSelection := !game.RoundStarted || validateSelection(game, content.Selection, content.Category)
-            if validSelection {
-                game.LastSelection = content.Selection
-                game.LastCategory = content.Category
-                game.UsedItems[content.Selection] = true
-                game.SelectionHistory = append(game.SelectionHistory, content.Selection)
+            game.LastSelection = content.Selection
+            game.LastCategory = content.Category
+            game.UsedItems[content.Selection] = true
+            game.SelectionHistory = append(game.SelectionHistory, content.Selection)
 
-                // Find next active player
-                nextPlayer := (game.CurrentPlayer + 1) % len(game.Players)
-                for game.Players[nextPlayer].IsEliminated {
-                    nextPlayer = (nextPlayer + 1) % len(game.Players)
-                }
-                game.CurrentPlayer = nextPlayer
-                
-                game.RoundStarted = true
-                game.TimeLeft = 30
-                
-                game.Mu.Unlock()
-                broadcastGameState(game)
-                startTimer(game)
-            } else {
-                game.Mu.Unlock()
-                player.Conn.WriteJSON(map[string]string{
-                    "type": "error",
-                    "message": "Invalid selection",
-                })
+            // Find next active player
+            nextPlayer := (game.CurrentPlayer + 1) % len(game.Players)
+            for game.Players[nextPlayer].IsEliminated {
+                nextPlayer = (nextPlayer + 1) % len(game.Players)
             }
+            game.CurrentPlayer = nextPlayer
+            
+            game.RoundStarted = true
+            game.TimeLeft = 30
+            
+            game.Mu.Unlock()
+            broadcastGameState(game)
+            startTimer(game)
         } else {
             game.Mu.Unlock()
         }
@@ -879,23 +768,6 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // If validating a selection, check the relationship
-    lastSelection := r.URL.Query().Get("lastSelection")
-    if lastSelection != "" {
-        isValid := false
-        if category == "actor" {
-            isValid = validateMovieActorRelation(lastSelection, query) || true // TODO: Implement actual validation
-        } else {
-            isValid = validateMovieActorRelation(query, lastSelection) || true // TODO: Implement actual validation
-        }
-        
-        if (!isValid) {
-            w.Header().Set("Content-Type", "application/json")
-            json.NewEncoder(w).Encode([]string{})
-            return
-        }
-    }
-
     encodedQuery := url.QueryEscape(query)
     searchUrl := fmt.Sprintf("https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=%s", encodedQuery)
     resp, err := http.Get(searchUrl)
@@ -969,6 +841,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
     }
 
     // Combine titles and revisions into a response, filtering by "birth_date"
+    // for actors and "cinematography" for movies
     filteredTitles := []string{}
     if queryPages, ok := revisionsData["query"].(map[string]interface{})["pages"].(map[string]interface{}); ok {
         for _, page := range queryPages {
@@ -1208,24 +1081,6 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func searchForConnection(content, searchTerm string, sections []string) bool {
-    content = strings.ToLower(content)
-    searchTerm = strings.ToLower(searchTerm)
-    
-    for _, section := range sections {
-        if idx := strings.Index(content, section); idx != -1 {
-            sectionContent := content[idx:]
-            if endIdx := strings.Index(sectionContent, "=="); endIdx != -1 {
-                sectionContent = sectionContent[:endIdx]
-            }
-            if strings.Contains(sectionContent, searchTerm) {
-                return true
-            }
-        }
-    }
-    return false
-}
-
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -1262,26 +1117,4 @@ func startTimer(game *Game) {
         // Then handle the expiry
         handleTimeExpiry(game)
     }()
-}
-
-func validateMovieActorRelation(movieTitle, actorName string) bool {
-    // Check movie page for actor
-    if foundInMovie := checkMoviePage(movieTitle, actorName); foundInMovie {
-        return true
-    }
-    
-    // Check actor page for movie
-    return checkActorPage(actorName, movieTitle)
-}
-
-func validateSelection(game *Game, selection, category string) bool {
-    if category == "movie" {
-        // For movies, check if the last actor was in this movie
-        // This would require an additional API call to validate
-        return true // TODO: Implement actual validation
-    } else {
-        // For actors, check if they were in the last movie
-        // This would require an additional API call to validate
-        return true // TODO: Implement actual validation
-    }
 }
