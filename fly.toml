@@ -21,6 +21,12 @@ primary_region = 'ord'
   min_machines_running = 0
   processes = ['app']
 
+[[http_service.handlers]]
+  [http_service.handlers.redirect]
+    source = "bomb.maxmonis.com/*"
+    destination = "https://www.bomb.maxmonis.com/:splat"
+    status = 301
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
